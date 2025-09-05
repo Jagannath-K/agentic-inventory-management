@@ -96,6 +96,50 @@ st.markdown("""
         color: #1f77b4 !important;
         font-weight: 500 !important;
     }
+    
+    /* Improve dataframe table styling */
+    .stDataFrame {
+        background-color: white !important;
+    }
+    
+    .stDataFrame table {
+        background-color: white !important;
+        border-collapse: collapse !important;
+    }
+    
+    .stDataFrame thead th {
+        background-color: #1f77b4 !important;
+        color: white !important;
+        font-weight: bold !important;
+        text-align: center !important;
+        padding: 12px 8px !important;
+        border: 1px solid #ddd !important;
+    }
+    
+    .stDataFrame tbody td {
+        background-color: white !important;
+        color: #262730 !important;
+        padding: 10px 8px !important;
+        border: 1px solid #ddd !important;
+        text-align: left !important;
+    }
+    
+    .stDataFrame tbody tr:nth-child(even) {
+        background-color: #f8f9fa !important;
+    }
+    
+    .stDataFrame tbody tr:hover {
+        background-color: #e3f2fd !important;
+    }
+    
+    /* Ensure text visibility in all dataframes */
+    .stDataFrame div[data-testid="stDataFrame"] {
+        background-color: white !important;
+    }
+    
+    .stDataFrame div[data-testid="stDataFrame"] * {
+        color: #262730 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -244,12 +288,15 @@ def create_ai_planning_dashboard():
                 st.session_state.last_update = datetime.now()
                 st.success(f"Generated plan for {len(plans)} products!")
     
+    # Add visual guide
+    st.info("💡 **Table Color Guide:** 🔴 Critical = Immediate reorder needed | 🟡 High = Reorder soon | 🟠 Medium = Monitor closely | 🟢 Low = Stock sufficient")
+    
     # Display plans if available
     if 'current_plans' in st.session_state and st.session_state.current_plans:
         plans = st.session_state.current_plans
         
         # Summary metrics
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
         
         with col1:
             critical_count = len([p for p in plans if p.urgency_level == 'CRITICAL'])
@@ -260,13 +307,22 @@ def create_ai_planning_dashboard():
             st.metric("High Priority", high_count)
         
         with col3:
+            # Count of actionable items (excluding LOW urgency)
+            actionable_count = len([p for p in plans if p.urgency_level in ['CRITICAL', 'HIGH', 'MEDIUM']])
+            st.metric("Actionable Items", actionable_count, 
+                     help="Items needing immediate to medium-term attention")
+        
+        with col4:
+            # Calculate value only for items that actually need reordering (excluding LOW urgency)
+            actionable_plans = [p for p in plans if p.urgency_level in ['CRITICAL', 'HIGH', 'MEDIUM'] and p.reorder_quantity > 0]
             total_reorder_value = sum(p.reorder_quantity * 
                                     st.session_state.planner.stock_data[
                                         st.session_state.planner.stock_data['product_id'] == p.product_id
-                                    ]['unit_cost'].iloc[0] for p in plans if p.reorder_quantity > 0)
-            st.metric("Total Reorder Value", f"₹{total_reorder_value:,.2f}")
+                                    ]['unit_cost'].iloc[0] for p in actionable_plans)
+            st.metric("Reorder Investment", f"₹{total_reorder_value:,.2f}", 
+                     help="Investment needed for critical, high & medium priority items")
         
-        with col4:
+        with col5:
             avg_confidence = np.mean([p.confidence_score for p in plans])
             st.metric("Avg Confidence", f"{avg_confidence:.1%}")
         
@@ -291,30 +347,58 @@ def create_ai_planning_dashboard():
         # Create DataFrame for display
         plan_data = []
         for plan in filtered_plans:
+            # Add visual indicators for urgency
+            urgency_display = plan.urgency_level
+            if plan.urgency_level == 'CRITICAL':
+                urgency_display = '🔴 CRITICAL'
+            elif plan.urgency_level == 'HIGH':
+                urgency_display = '🟡 HIGH'
+            elif plan.urgency_level == 'MEDIUM':
+                urgency_display = '🟠 MEDIUM'
+            else:
+                urgency_display = '🟢 LOW'
+            
             plan_data.append({
                 'Product': plan.product_name,
                 'Current Stock': plan.current_stock,
                 'Predicted Demand (30d)': f"{plan.predicted_demand:.1f}",
                 'Reorder Quantity': plan.reorder_quantity,
-                'Urgency': plan.urgency_level,
+                'Urgency': urgency_display,
                 'Reorder Date': plan.reorder_date.strftime('%Y-%m-%d'),
                 'Confidence': f"{plan.confidence_score:.1%}",
-                'Reasoning': plan.reasoning[:100] + "..." if len(plan.reasoning) > 100 else plan.reasoning
+                'Reasoning': plan.reasoning[:80] + "..." if len(plan.reasoning) > 80 else plan.reasoning
             })
         
         if plan_data:
             df = pd.DataFrame(plan_data)
             
-            # Color code urgency
+            # Improved color coding with better contrast
             def highlight_urgency(row):
-                if row['Urgency'] == 'CRITICAL':
-                    return ['background-color: #ffebee'] * len(row)
-                elif row['Urgency'] == 'HIGH':
-                    return ['background-color: #fff3e0'] * len(row)
+                urgency = row['Urgency']
+                if 'CRITICAL' in urgency:
+                    return ['background-color: #ffcdd2; color: #b71c1c; font-weight: bold'] * len(row)
+                elif 'HIGH' in urgency:
+                    return ['background-color: #fff3e0; color: #e65100; font-weight: bold'] * len(row)
+                elif 'MEDIUM' in urgency:
+                    return ['background-color: #fff8e1; color: #f57c00'] * len(row)
                 else:
-                    return [''] * len(row)
+                    return ['background-color: #e8f5e8; color: #1b5e20'] * len(row)
             
-            st.dataframe(df.style.apply(highlight_urgency, axis=1), use_container_width=True)
+            # Apply styling with better contrast
+            styled_df = df.style.apply(highlight_urgency, axis=1)
+            styled_df = styled_df.set_table_styles([
+                {'selector': 'th', 'props': [('background-color', '#1f77b4'), 
+                                             ('color', 'white'), 
+                                             ('font-weight', 'bold'),
+                                             ('text-align', 'center')]},
+                {'selector': 'td', 'props': [('text-align', 'left'),
+                                             ('padding', '8px'),
+                                             ('border', '1px solid #ddd')]},
+                {'selector': 'table', 'props': [('border-collapse', 'collapse'),
+                                               ('width', '100%')]}
+            ])
+            
+            st.dataframe(styled_df, use_container_width=True)
             
             # Export option
             csv = df.to_csv(index=False)

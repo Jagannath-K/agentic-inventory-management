@@ -199,65 +199,164 @@ class ExecutorAgent(BaseAgent):
         
         return result
     
-    def send_order_email(self, order_request: OrderRequest, order_id: str) -> bool:
-        """Send order email to supplier"""
+    async def simulate_order_placement_without_email(self, order_request: OrderRequest) -> OrderResult:
+        """Place order without sending individual email (for batch processing)"""
+        # Generate order ID
+        order_id = f"ORD-{self.order_counter:06d}"
+        self.order_counter += 1
+        
         try:
-            # Create email subject and body
-            subject = f"Purchase Order {order_id} - {order_request.product_name}"
+            # Add some random variation to cost
+            cost_variation = np.random.uniform(0.98, 1.02)
+            actual_cost = order_request.estimated_cost * cost_variation
+            
+            result = OrderResult(
+                order_id=order_id,
+                success=True,
+                message=f"Order processed successfully (pending batch email)",
+                estimated_delivery=order_request.expected_delivery,
+                actual_cost=actual_cost
+            )
+            
+            self.logger.info(f"Order {order_id} processed for batch email for {order_request.product_name}")
+                
+        except Exception as e:
+            result = OrderResult(
+                order_id=order_id,
+                success=False,
+                message=f"Order processing error: {str(e)}"
+            )
+            self.logger.error(f"Order {order_id} error: {e}")
+        
+        return result
+    
+    def send_order_email(self, order_request: OrderRequest, order_id: str) -> bool:
+        """Send order email to supplier - individual order (deprecated, use send_consolidated_order_email)"""
+        # This method is kept for compatibility but consolidated email is preferred
+        return self.send_consolidated_order_email([order_request], [order_id])
+    
+    def send_consolidated_order_email(self, order_requests: List[OrderRequest], order_ids: List[str]) -> bool:
+        """Send consolidated order email with all orders in a single table"""
+        try:
+            if not order_requests:
+                return True
+                
+            # Create email subject
+            order_count = len(order_requests)
+            total_value = sum(req.estimated_cost for req in order_requests)
+            subject = f"📦 Purchase Order - {order_count} Items (₹{total_value:,.2f}) - {datetime.now().strftime('%Y-%m-%d')}"
+            
+            # Create consolidated order table
+            order_rows = ""
+            for i, (order_request, order_id) in enumerate(zip(order_requests, order_ids), 1):
+                order_rows += f"""
+                <tr style="border-bottom: 1px solid #ddd;">
+                    <td style="padding: 12px; text-align: center; font-weight: bold;">{i}</td>
+                    <td style="padding: 12px; text-align: center; font-family: monospace; background-color: #f0f0f0;">{order_id}</td>
+                    <td style="padding: 12px; text-align: center; font-family: monospace; color: #666;">{order_request.product_id}</td>
+                    <td style="padding: 12px; font-weight: bold;">{order_request.product_name}</td>
+                    <td style="padding: 12px; text-align: center; font-size: 16px; font-weight: bold;">{order_request.quantity}</td>
+                    <td style="padding: 12px; text-align: right; font-weight: bold; color: #2e7d32;">₹{order_request.estimated_cost:,.2f}</td>
+                    <td style="padding: 12px; text-align: center;">
+                        <span style="padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; 
+                        {'background-color: #ffcdd2; color: #b71c1c;' if order_request.priority == 'CRITICAL' 
+                         else 'background-color: #fff3e0; color: #e65100;' if order_request.priority == 'HIGH'
+                         else 'background-color: #fff8e1; color: #f57c00;'}">{order_request.priority}</span>
+                    </td>
+                    <td style="padding: 12px; text-align: center;">{order_request.expected_delivery.strftime('%Y-%m-%d')}</td>
+                </tr>
+                """
             
             body = f"""
             <!DOCTYPE html>
             <html>
             <head>
                 <style>
-                    body {{ font-family: Arial, sans-serif; margin: 20px; }}
-                    .header {{ background-color: #4CAF50; color: white; padding: 15px; border-radius: 5px; }}
-                    .content {{ background-color: #f9f9f9; padding: 20px; margin: 10px 0; border-radius: 5px; }}
-                    .order-details {{ background-color: white; padding: 15px; margin: 10px 0; border-left: 4px solid #4CAF50; }}
-                    .footer {{ color: #666; font-size: 12px; margin-top: 20px; }}
+                    body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
+                    .container {{ max-width: 1000px; margin: 0 auto; background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+                    .header {{ background: linear-gradient(135deg, #1f77b4, #4CAF50); color: white; padding: 25px; text-align: center; }}
+                    .content {{ padding: 30px; }}
+                    .summary {{ background-color: #e3f2fd; padding: 20px; margin: 20px 0; border-radius: 8px; border-left: 5px solid #1f77b4; }}
+                    .order-table {{ width: 100%; border-collapse: collapse; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+                    .order-table th {{ background-color: #1f77b4; color: white; padding: 15px 12px; font-weight: bold; text-align: center; }}
+                    .order-table td {{ border-bottom: 1px solid #ddd; }}
+                    .total-row {{ background-color: #f8f9fa; font-weight: bold; font-size: 16px; }}
+                    .footer {{ background-color: #f8f9fa; padding: 20px; text-align: center; color: #666; font-size: 12px; }}
+                    .ai-note {{ background-color: #fff3e0; padding: 15px; margin: 15px 0; border-radius: 6px; border-left: 4px solid #ff9800; }}
                 </style>
             </head>
             <body>
-                <div class="header">
-                    <h2>📦 PURCHASE ORDER</h2>
-                </div>
-                
-                <div class="content">
-                    <p>Dear Supplier,</p>
-                    <p>We would like to place the following order based on our AI-predicted demand analysis:</p>
-                    
-                    <div class="order-details">
-                        <h3>Order Details:</h3>
-                        <ul>
-                            <li><strong>Order ID:</strong> {order_id}</li>
-                            <li><strong>Product ID:</strong> {order_request.product_id}</li>
-                            <li><strong>Product Name:</strong> {order_request.product_name}</li>
-                            <li><strong>Quantity:</strong> {order_request.quantity} units</li>
-                            <li><strong>Estimated Cost:</strong> ₹{order_request.estimated_cost:,.2f}</li>
-                            <li><strong>Priority:</strong> {order_request.priority}</li>
-                            <li><strong>Requested Delivery:</strong> {order_request.expected_delivery.strftime('%Y-%m-%d')}</li>
-                        </ul>
+                <div class="container">
+                    <div class="header">
+                        <h1>🤖 AI-Generated Purchase Order</h1>
+                        <p style="margin: 5px 0; font-size: 18px;">Micro Enterprise Inventory Management</p>
                     </div>
                     
-                    <p><strong>Note:</strong> This order quantity has been calculated using AI demand prediction to optimize inventory levels based on forecasted customer demand.</p>
+                    <div class="content">
+                        <p style="font-size: 16px; color: #333;"><strong>Dear Supplier,</strong></p>
+                        <p>We would like to place the following consolidated order based on our AI demand prediction analysis:</p>
+                        
+                        <div class="summary">
+                            <h3 style="margin-top: 0; color: #1f77b4;">📊 Order Summary</h3>
+                            <ul style="margin: 10px 0; padding-left: 20px;">
+                                <li><strong>Total Items:</strong> {order_count} products</li>
+                                <li><strong>Total Estimated Value:</strong> ₹{total_value:,.2f}</li>
+                                <li><strong>Order Date:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</li>
+                                <li><strong>Request Type:</strong> AI-Optimized Inventory Replenishment</li>
+                            </ul>
+                        </div>
+                        
+                        <h3 style="color: #1f77b4;">📋 Detailed Order List</h3>
+                        <table class="order-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Order ID</th>
+                                    <th>Product ID</th>
+                                    <th>Product Name</th>
+                                    <th>Quantity</th>
+                                    <th>Estimated Cost</th>
+                                    <th>Priority</th>
+                                    <th>Required By</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {order_rows}
+                                <tr class="total-row">
+                                    <td colspan="5" style="padding: 15px; text-align: right; background-color: #f8f9fa;">
+                                        <strong>TOTAL ORDER VALUE:</strong>
+                                    </td>
+                                    <td style="padding: 15px; text-align: right; background-color: #f8f9fa; color: #1f77b4; font-size: 18px;">
+                                        <strong>₹{total_value:,.2f}</strong>
+                                    </td>
+                                    <td colspan="2" style="background-color: #f8f9fa;"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        
+                        <div class="ai-note">
+                            <p style="margin: 0;"><strong>🤖 AI Analysis Note:</strong> These quantities have been calculated using machine learning algorithms that analyze historical sales patterns, seasonal trends, and current stock levels to optimize inventory for micro enterprise operations.</p>
+                        </div>
+                        
+                        <h3 style="color: #1f77b4;">📞 Please Confirm:</h3>
+                        <ul style="line-height: 1.6;">
+                            <li>✅ Order confirmation and acceptance</li>
+                            <li>💰 Final pricing (if different from estimates)</li>
+                            <li>📅 Confirmed delivery dates for each item</li>
+                            <li>🚚 Delivery method and tracking information</li>
+                            <li>💳 Payment terms and preferred method</li>
+                        </ul>
+                        
+                        <p style="margin: 25px 0; font-size: 16px;">Thank you for your continued partnership in supporting our micro enterprise operations.</p>
+                        
+                        <p><strong>Best regards,</strong><br>
+                        <span style="color: #1f77b4; font-weight: bold;">Agentic AI Inventory Management System</span><br>
+                        <small>Micro Enterprise Solutions</small></p>
+                    </div>
                     
-                    <p>Please confirm receipt of this order and provide:</p>
-                    <ul>
-                        <li>Order confirmation</li>
-                        <li>Final pricing</li>
-                        <li>Expected delivery date</li>
-                        <li>Tracking information when available</li>
-                    </ul>
-                    
-                    <p>Thank you for your continued partnership.</p>
-                    
-                    <p>Best regards,<br>
-                    Agentic Inventory Management System<br>
-                    Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-                </div>
-                
-                <div class="footer">
-                    <p>This is an automated order generated by AI analysis. Please contact us if you have any questions.</p>
+                    <div class="footer">
+                        <p>🤖 This order was automatically generated by AI analysis • Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} • Please contact us for any questions</p>
+                    </div>
                 </div>
             </body>
             </html>
@@ -292,11 +391,11 @@ class ExecutorAgent(BaseAgent):
             server.send_message(msg)
             server.quit()
             
-            self.logger.info(f"Order email sent successfully for {order_request.product_name} to {self.supplier_email}")
+            self.logger.info(f"Consolidated order email sent successfully for {order_count} items to {self.supplier_email}")
             return True
             
         except Exception as e:
-            self.logger.error(f"Failed to send order email: {e}")
+            self.logger.error(f"Failed to send consolidated order email: {e}")
             return False
         
         return result
@@ -393,8 +492,37 @@ class ExecutorAgent(BaseAgent):
         
         return order_result
     
+    async def execute_order_without_email(self, order_request: OrderRequest) -> OrderResult:
+        """Execute a single order request without sending individual email (for batch processing)"""
+        self.logger.info(f"Processing order for {order_request.product_name} - Quantity: {order_request.quantity} (batch mode)")
+        
+        # Validate order
+        validation = self.validate_order_request(order_request)
+        
+        if not validation['valid']:
+            return OrderResult(
+                order_id="VALIDATION_FAILED",
+                success=False,
+                message=f"Validation failed: {'; '.join(validation['issues'])}"
+            )
+        
+        # Log warnings
+        for warning in validation['warnings']:
+            self.logger.warning(warning)
+        
+        # Place order (without email sending)
+        order_result = await self.simulate_order_placement_without_email(order_request)
+        
+        # Update records and log transaction
+        if order_result.success:
+            self.update_inventory_records(order_request, order_result)
+        
+        self.log_order_transaction(order_request, order_result)
+        
+        return order_result
+    
     async def execute_inventory_plans(self, plans: List[InventoryPlan]) -> Dict[str, Any]:
-        """Execute multiple inventory plans"""
+        """Execute multiple inventory plans with consolidated email approach"""
         if self.stock_data is None:
             self.load_data()
         
@@ -412,18 +540,27 @@ class ExecutorAgent(BaseAgent):
             'order_details': []
         }
         
-        # Execute urgent plans first
-        self.logger.info(f"Executing {len(urgent_plans)} urgent inventory plans")
+        # Collect all orders to be executed (without sending individual emails)
+        all_order_requests = []
+        all_order_ids = []
+        all_order_results = []
+        
+        # Process urgent plans first
+        self.logger.info(f"Processing {len(urgent_plans)} urgent inventory plans")
         
         for plan in urgent_plans:
             if plan.reorder_quantity > 0:
                 order_request = self.create_order_request(plan)
-                order_result = await self.execute_order(order_request)
+                order_result = await self.execute_order_without_email(order_request)
                 
                 results['urgent_executed'] += 1
                 if order_result.success:
                     results['successful_orders'] += 1
                     results['total_cost'] += order_result.actual_cost or order_request.estimated_cost
+                    # Collect successful orders for consolidated email
+                    all_order_requests.append(order_request)
+                    all_order_ids.append(order_result.order_id)
+                    all_order_results.append(order_result)
                 else:
                     results['failed_orders'] += 1
                 
@@ -435,20 +572,24 @@ class ExecutorAgent(BaseAgent):
                     'cost': order_result.actual_cost or order_request.estimated_cost
                 })
         
-        # Execute medium priority plans (limit to avoid overwhelming suppliers)
+        # Process medium priority plans (limit to avoid overwhelming suppliers)
         medium_to_execute = medium_plans[:5]  # Limit to 5 medium priority orders
         
-        self.logger.info(f"Executing {len(medium_to_execute)} medium priority inventory plans")
+        self.logger.info(f"Processing {len(medium_to_execute)} medium priority inventory plans")
         
         for plan in medium_to_execute:
             if plan.reorder_quantity > 0:
                 order_request = self.create_order_request(plan)
-                order_result = await self.execute_order(order_request)
+                order_result = await self.execute_order_without_email(order_request)
                 
                 results['medium_executed'] += 1
                 if order_result.success:
                     results['successful_orders'] += 1
                     results['total_cost'] += order_result.actual_cost or order_request.estimated_cost
+                    # Collect successful orders for consolidated email
+                    all_order_requests.append(order_request)
+                    all_order_ids.append(order_result.order_id)
+                    all_order_results.append(order_result)
                 else:
                     results['failed_orders'] += 1
                 
@@ -459,6 +600,21 @@ class ExecutorAgent(BaseAgent):
                     'message': order_result.message,
                     'cost': order_result.actual_cost or order_request.estimated_cost
                 })
+        
+        # Send consolidated email with all successful orders
+        if all_order_requests:
+            self.logger.info(f"Sending consolidated email for {len(all_order_requests)} orders")
+            email_success = self.send_consolidated_order_email(all_order_requests, all_order_ids)
+            
+            if email_success:
+                results['consolidated_email_sent'] = True
+                results['email_message'] = f"Consolidated email sent successfully for {len(all_order_requests)} orders"
+            else:
+                results['consolidated_email_sent'] = False
+                results['email_message'] = "Failed to send consolidated email"
+        else:
+            results['consolidated_email_sent'] = False
+            results['email_message'] = "No orders to send"
         
         self.logger.info(
             f"Execution complete: {results['successful_orders']} successful, "
