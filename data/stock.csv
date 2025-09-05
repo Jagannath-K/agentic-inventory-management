@@ -1,0 +1,21 @@
+product_id,product_name,current_stock,reorder_point,max_stock,unit_cost,last_updated,category,supplier_id
+G001,Rice Basmati 1kg,44,35,210,85,2025-09-05 10:00:00,Staples,S001
+G002,Wheat Flour 1kg,71,24,186,35,2025-09-05 10:00:00,Staples,S001
+G003,Sugar 1kg,55,28,184,45,2025-09-05 10:00:00,Staples,S001
+G004,Dal Toor 500g,23,15,82,120,2025-09-05 10:00:00,Pulses,S001
+G005,Oil Sunflower 1L,23,8,95,140,2025-09-05 16:11:36,Cooking Oil,S002
+G006,Milk Packet 500ml,50,25,205,24,2025-09-05 16:10:36,Dairy,S003
+G007,Bread White 400g,78,23,185,28,2025-09-05 16:11:04,Bakery,S004
+G008,Eggs 12 pieces,26,9,78,75,2025-09-05 10:00:00,Protein,S003
+G009,Tea Powder 250g,29,23,179,180,2025-09-05 10:00:00,Beverages,S005
+G010,Salt 1kg,30,11,72,18,2025-09-05 10:00:00,Spices,S007
+G011,Biscuits Parle-G,44,25,156,12,2025-09-05 10:00:00,Snacks,S005
+G012,Soap Lifebouy,45,17,115,35,2025-09-05 10:00:00,Personal Care,S006
+G013,Detergent 1kg,2,10,78,180,2025-09-05 10:00:00,Household,S006
+G014,Turmeric Powder 100g,20,14,65,45,2025-09-05 10:00:00,Spices,S007
+G015,Onions 1kg,25,11,54,25,2025-09-05 10:00:00,Vegetables,S008
+G016,Ghee 500ml,45,29,202,420,2025-09-05 10:00:00,Dairy,S003
+G017,Almonds 250g,17,9,51,680,2025-09-05 10:00:00,Dry Fruits,S009
+G018,Honey 500g,27,14,60,280,2025-09-05 10:00:00,Health,S009
+G019,Coffee Instant 100g,40,15,155,150,2025-09-05 10:00:00,Beverages,S005
+G020,Pickle Mixed 400g,20,12,93,95,2025-09-05 10:00:00,Condiments,S007

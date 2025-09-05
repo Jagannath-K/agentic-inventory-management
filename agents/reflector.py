@@ -1,0 +1,556 @@
+"""
+Reflector Agent - Performance analysis and system optimization
+"""
+
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+from typing import Dict, List, Any, Tuple
+from dataclasses import dataclass
+import logging
+import json
+import os
+from .planner import BaseAgent, InventoryPlan
+
+@dataclass
+class PerformanceMetrics:
+    """Data class for system performance metrics"""
+    metric_name: str
+    current_value: float
+    target_value: float
+    trend: str
+    improvement_suggestion: str
+    priority: str
+
+@dataclass
+class SystemInsight:
+    """Data class for system insights and recommendations"""
+    insight_type: str
+    title: str
+    description: str
+    impact_level: str
+    recommended_actions: List[str]
+    estimated_benefit: str
+
+class ReflectorAgent(BaseAgent):
+    """
+    AI Agent responsible for system performance analysis and optimization recommendations
+    """
+    
+    def __init__(self):
+        super().__init__("ReflectorAgent")
+        self.sales_data = None
+        self.stock_data = None
+        self.order_log = None
+        self.performance_history = []
+        
+    def load_data(self) -> None:
+        """Load all necessary data for analysis"""
+        try:
+            self.sales_data = pd.read_csv('data/sales.csv')
+            self.stock_data = pd.read_csv('data/stock.csv')
+            
+            # Convert date columns
+            self.sales_data['date'] = pd.to_datetime(self.sales_data['date'])
+            self.stock_data['last_updated'] = pd.to_datetime(self.stock_data['last_updated'])
+            
+            # Load order log with error handling
+            self.order_log = []
+            if os.path.exists('data/order_log.json'):
+                try:
+                    with open('data/order_log.json', 'r') as f:
+                        content = f.read().strip()
+                        if content:  # Check if file is not empty
+                            self.order_log = json.loads(content)
+                        else:
+                            self.logger.warning("order_log.json is empty, initializing with empty list")
+                            self.order_log = []
+                except json.JSONDecodeError as json_error:
+                    self.logger.warning(f"Error parsing order_log.json: {json_error}. Initializing with empty list")
+                    self.order_log = []
+                    # Create a backup of the corrupted file
+                    import shutil
+                    shutil.copy('data/order_log.json', f'data/order_log_corrupted_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json')
+                    # Initialize with empty JSON file
+                    with open('data/order_log.json', 'w') as f:
+                        json.dump([], f, indent=2)
+                except Exception as file_error:
+                    self.logger.warning(f"Error reading order_log.json: {file_error}. Initializing with empty list")
+                    self.order_log = []
+            else:
+                self.logger.info("order_log.json not found, initializing with empty list")
+                # Create the file if it doesn't exist
+                with open('data/order_log.json', 'w') as f:
+                    json.dump([], f, indent=2)
+            
+            self.logger.info("Reflector data loaded successfully")
+        except Exception as e:
+            self.logger.error(f"Error loading data: {e}")
+            # Don't raise the exception, just log it and continue with minimal data
+            if not hasattr(self, 'sales_data') or self.sales_data is None:
+                self.sales_data = pd.DataFrame()
+            if not hasattr(self, 'stock_data') or self.stock_data is None:
+                self.stock_data = pd.DataFrame()
+            if not hasattr(self, 'order_log') or self.order_log is None:
+                self.order_log = []
+    
+    def calculate_inventory_turnover(self) -> Dict[str, float]:
+        """Calculate inventory turnover ratios for all products"""
+        if self.sales_data is None:
+            self.load_data()
+        
+        turnover_ratios = {}
+        
+        for _, product in self.stock_data.iterrows():
+            product_id = product['product_id']
+            
+            # Calculate total sales in the period
+            product_sales = self.sales_data[self.sales_data['product_id'] == product_id]
+            total_sold = product_sales['quantity_sold'].sum()
+            
+            # Calculate COGS (Cost of Goods Sold)
+            cogs = total_sold * product['unit_cost']
+            
+            # Average inventory (simplified - using current stock)
+            avg_inventory = product['current_stock'] * product['unit_cost']
+            
+            # Calculate turnover ratio
+            if avg_inventory > 0:
+                turnover_ratio = cogs / avg_inventory
+            else:
+                turnover_ratio = 0
+            
+            turnover_ratios[product_id] = turnover_ratio
+        
+        return turnover_ratios
+    
+    def analyze_stockout_risk(self) -> Dict[str, Dict[str, Any]]:
+        """Analyze stockout risk for all products"""
+        if self.sales_data is None:
+            self.load_data()
+        
+        stockout_analysis = {}
+        
+        for _, product in self.stock_data.iterrows():
+            product_id = product['product_id']
+            current_stock = product['current_stock']
+            reorder_point = product['reorder_point']
+            
+            # Calculate recent sales velocity
+            recent_sales = self.sales_data[
+                (self.sales_data['product_id'] == product_id) &
+                (self.sales_data['date'] >= datetime.now() - timedelta(days=7))
+            ]['quantity_sold'].sum()
+            
+            daily_velocity = recent_sales / 7 if recent_sales > 0 else 0
+            
+            # Calculate days until stockout
+            if daily_velocity > 0:
+                days_until_stockout = current_stock / daily_velocity
+            else:
+                days_until_stockout = float('inf')
+            
+            # Risk assessment
+            if days_until_stockout <= 3:
+                risk_level = "CRITICAL"
+            elif days_until_stockout <= 7:
+                risk_level = "HIGH"
+            elif days_until_stockout <= 14:
+                risk_level = "MEDIUM"
+            else:
+                risk_level = "LOW"
+            
+            stockout_analysis[product_id] = {
+                'current_stock': current_stock,
+                'daily_velocity': daily_velocity,
+                'days_until_stockout': days_until_stockout,
+                'risk_level': risk_level,
+                'below_reorder_point': current_stock < reorder_point
+            }
+        
+        return stockout_analysis
+    
+    def evaluate_supplier_performance(self) -> Dict[str, Dict[str, Any]]:
+        """Evaluate supplier performance based on order history"""
+        if not self.order_log:
+            return {}
+        
+        supplier_performance = {}
+        
+        # Group orders by supplier
+        supplier_orders = {}
+        for order in self.order_log:
+            supplier_id = order['supplier_id']
+            if supplier_id not in supplier_orders:
+                supplier_orders[supplier_id] = []
+            supplier_orders[supplier_id].append(order)
+        
+        # Analyze each supplier
+        for supplier_id, orders in supplier_orders.items():
+            total_orders = len(orders)
+            successful_orders = len([o for o in orders if o['success']])
+            success_rate = successful_orders / total_orders if total_orders > 0 else 0
+            
+            # Calculate average cost variance
+            cost_variances = []
+            delivery_variances = []
+            
+            for order in orders:
+                if order['success'] and order['actual_cost'] and order['estimated_cost']:
+                    cost_variance = (order['actual_cost'] - order['estimated_cost']) / order['estimated_cost']
+                    cost_variances.append(cost_variance)
+                
+                if (order['success'] and order['estimated_delivery'] and 
+                    order['expected_delivery']):
+                    # Calculate delivery variance (simplified)
+                    delivery_variances.append(0)  # Placeholder for actual calculation
+            
+            avg_cost_variance = np.mean(cost_variances) if cost_variances else 0
+            
+            # Performance scoring
+            performance_score = (
+                success_rate * 0.5 +  # Success rate weight: 50%
+                max(0, 1 - abs(avg_cost_variance)) * 0.3 +  # Cost accuracy weight: 30%
+                0.8 * 0.2  # Delivery performance weight: 20% (simplified)
+            )
+            
+            supplier_performance[supplier_id] = {
+                'total_orders': total_orders,
+                'success_rate': success_rate,
+                'avg_cost_variance': avg_cost_variance,
+                'performance_score': performance_score,
+                'recommended_action': self._get_supplier_recommendation(performance_score)
+            }
+        
+        return supplier_performance
+    
+    def _get_supplier_recommendation(self, performance_score: float) -> str:
+        """Get recommendation based on supplier performance score"""
+        if performance_score >= 0.9:
+            return "PREFERRED - Excellent performance"
+        elif performance_score >= 0.7:
+            return "GOOD - Continue monitoring"
+        elif performance_score >= 0.5:
+            return "REVIEW - Performance issues detected"
+        else:
+            return "CRITICAL - Consider alternative suppliers"
+    
+    def calculate_key_performance_indicators(self) -> List[PerformanceMetrics]:
+        """Calculate key performance indicators for the inventory system"""
+        if self.sales_data is None:
+            self.load_data()
+        
+        kpis = []
+        
+        # 1. Overall Inventory Turnover
+        turnover_ratios = self.calculate_inventory_turnover()
+        avg_turnover = np.mean(list(turnover_ratios.values())) if turnover_ratios else 0
+        
+        kpis.append(PerformanceMetrics(
+            metric_name="Average Inventory Turnover",
+            current_value=avg_turnover,
+            target_value=6.0,  # Target: 6 times per year
+            trend="stable" if 5.0 <= avg_turnover <= 7.0 else "needs_improvement",
+            improvement_suggestion="Optimize reorder quantities and improve demand forecasting" if avg_turnover < 5.0 else "Good performance",
+            priority="HIGH" if avg_turnover < 4.0 else "MEDIUM"
+        ))
+        
+        # 2. Stockout Risk Assessment
+        stockout_analysis = self.analyze_stockout_risk()
+        high_risk_products = len([p for p in stockout_analysis.values() if p['risk_level'] in ['CRITICAL', 'HIGH']])
+        total_products = len(stockout_analysis)
+        stockout_risk_percentage = (high_risk_products / total_products * 100) if total_products > 0 else 0
+        
+        kpis.append(PerformanceMetrics(
+            metric_name="High Stockout Risk Products (%)",
+            current_value=stockout_risk_percentage,
+            target_value=5.0,  # Target: <5% of products at high risk
+            trend="critical" if stockout_risk_percentage > 15 else "good",
+            improvement_suggestion="Implement more aggressive reordering for high-risk products" if stockout_risk_percentage > 5 else "Good risk management",
+            priority="CRITICAL" if stockout_risk_percentage > 15 else "LOW"
+        ))
+        
+        # 3. Order Success Rate
+        if self.order_log:
+            total_orders = len(self.order_log)
+            successful_orders = len([o for o in self.order_log if o['success']])
+            success_rate = (successful_orders / total_orders * 100) if total_orders > 0 else 100
+            
+            kpis.append(PerformanceMetrics(
+                metric_name="Order Success Rate (%)",
+                current_value=success_rate,
+                target_value=95.0,
+                trend="good" if success_rate >= 90 else "needs_improvement",
+                improvement_suggestion="Review supplier reliability and backup supplier options" if success_rate < 95 else "Excellent performance",
+                priority="HIGH" if success_rate < 90 else "LOW"
+            ))
+        
+        # 4. Inventory Value Efficiency
+        total_inventory_value = sum(
+            row['current_stock'] * row['unit_cost'] 
+            for _, row in self.stock_data.iterrows()
+        )
+        
+        # Calculate monthly sales value
+        monthly_sales = self.sales_data[
+            self.sales_data['date'] >= datetime.now() - timedelta(days=30)
+        ]
+        monthly_sales_value = (monthly_sales['quantity_sold'] * monthly_sales['unit_price']).sum()
+        
+        inventory_to_sales_ratio = (total_inventory_value / monthly_sales_value) if monthly_sales_value > 0 else 0
+        
+        kpis.append(PerformanceMetrics(
+            metric_name="Inventory to Monthly Sales Ratio",
+            current_value=inventory_to_sales_ratio,
+            target_value=2.0,  # Target: 2 months of inventory
+            trend="optimal" if 1.5 <= inventory_to_sales_ratio <= 2.5 else "needs_adjustment",
+            improvement_suggestion="Reduce excess inventory" if inventory_to_sales_ratio > 3 else "Increase safety stock" if inventory_to_sales_ratio < 1 else "Well balanced",
+            priority="MEDIUM" if abs(inventory_to_sales_ratio - 2.0) > 1.0 else "LOW"
+        ))
+        
+        return kpis
+    
+    def generate_system_insights(self) -> List[SystemInsight]:
+        """Generate actionable insights for system optimization"""
+        insights = []
+        
+        # Analyze turnover patterns
+        turnover_ratios = self.calculate_inventory_turnover()
+        low_turnover_products = [
+            pid for pid, ratio in turnover_ratios.items() if ratio < 2.0
+        ]
+        
+        if low_turnover_products:
+            insights.append(SystemInsight(
+                insight_type="INVENTORY_OPTIMIZATION",
+                title="Low Inventory Turnover Detected",
+                description=f"{len(low_turnover_products)} products have low inventory turnover (< 2.0). This ties up capital and increases holding costs.",
+                impact_level="MEDIUM",
+                recommended_actions=[
+                    "Review demand forecasting models for these products",
+                    "Consider reducing reorder quantities",
+                    "Implement promotional strategies to increase sales",
+                    "Evaluate product lifecycle and consider discontinuation for consistently low performers"
+                ],
+                estimated_benefit="10-15% reduction in holding costs"
+            ))
+        
+        # Analyze stockout risks
+        stockout_analysis = self.analyze_stockout_risk()
+        critical_products = [
+            pid for pid, analysis in stockout_analysis.items() 
+            if analysis['risk_level'] == 'CRITICAL'
+        ]
+        
+        if critical_products:
+            insights.append(SystemInsight(
+                insight_type="SUPPLY_CHAIN_RISK",
+                title="Critical Stockout Risk Identified",
+                description=f"{len(critical_products)} products are at critical risk of stockout within 3 days.",
+                impact_level="HIGH",
+                recommended_actions=[
+                    "Place emergency orders for critical products immediately",
+                    "Review and adjust reorder points",
+                    "Implement automated alerts for low stock situations",
+                    "Consider expedited shipping for urgent orders"
+                ],
+                estimated_benefit="Prevent revenue loss and customer dissatisfaction"
+            ))
+        
+        # Analyze supplier performance
+        supplier_performance = self.evaluate_supplier_performance()
+        poor_performers = [
+            sid for sid, perf in supplier_performance.items() 
+            if perf['performance_score'] < 0.7
+        ]
+        
+        if poor_performers:
+            insights.append(SystemInsight(
+                insight_type="SUPPLIER_MANAGEMENT",
+                title="Underperforming Suppliers Identified",
+                description=f"{len(poor_performers)} suppliers have performance scores below 70%.",
+                impact_level="MEDIUM",
+                recommended_actions=[
+                    "Conduct supplier performance reviews",
+                    "Negotiate improved terms and SLAs",
+                    "Identify and qualify backup suppliers",
+                    "Consider supplier diversification strategy"
+                ],
+                estimated_benefit="5-10% improvement in order reliability"
+            ))
+        
+        # Seasonal analysis insight
+        if len(self.sales_data) > 30:
+            insights.append(SystemInsight(
+                insight_type="DEMAND_FORECASTING",
+                title="Implement Seasonal Demand Forecasting",
+                description="Historical data suggests seasonal patterns that could improve demand prediction accuracy.",
+                impact_level="MEDIUM",
+                recommended_actions=[
+                    "Implement time-series forecasting models",
+                    "Adjust safety stock levels seasonally",
+                    "Plan promotional campaigns around demand patterns",
+                    "Coordinate with suppliers for seasonal capacity planning"
+                ],
+                estimated_benefit="15-20% improvement in forecast accuracy"
+            ))
+        
+        return insights
+    
+    def create_optimization_report(self) -> Dict[str, Any]:
+        """Create comprehensive optimization report with robust error handling"""
+        try:
+            if self.sales_data is None or len(self.sales_data) == 0:
+                self.load_data()
+            
+            # Ensure we have minimal data to work with
+            if self.sales_data is None or len(self.sales_data) == 0:
+                return self._create_minimal_report("No sales data available")
+            
+            if self.stock_data is None or len(self.stock_data) == 0:
+                return self._create_minimal_report("No stock data available")
+            
+            kpis = self.calculate_key_performance_indicators()
+            insights = self.generate_system_insights()
+            stockout_analysis = self.analyze_stockout_risk()
+            supplier_performance = self.evaluate_supplier_performance()
+            
+            # Prioritize recommendations
+            high_priority_kpis = [kpi for kpi in kpis if kpi.priority == "CRITICAL"]
+            high_impact_insights = [insight for insight in insights if hasattr(insight, 'impact_level') and insight.impact_level == "HIGH"]
+            
+            report = {
+                'report_date': datetime.now().isoformat(),
+                'summary': {
+                    'total_products_analyzed': len(self.stock_data),
+                    'high_priority_issues': len(high_priority_kpis) + len(high_impact_insights),
+                    'suppliers_evaluated': len(supplier_performance),
+                    'overall_system_health': self._calculate_system_health_score(kpis)
+                },
+                'key_performance_indicators': [
+                    {
+                        'metric': kpi.metric_name,
+                        'current': kpi.current_value,
+                        'target': kpi.target_value,
+                        'trend': kpi.trend,
+                        'priority': kpi.priority,
+                        'suggestion': kpi.improvement_suggestion
+                    } for kpi in kpis
+                ],
+                'critical_insights': [
+                    {
+                        'type': insight.insight_type,
+                        'title': insight.title,
+                        'description': insight.description,
+                        'impact': insight.impact_level,
+                        'actions': insight.recommended_actions,
+                        'benefit': insight.estimated_benefit
+                    } for insight in insights
+                ],
+                'stockout_risks': {
+                    pid: analysis for pid, analysis in stockout_analysis.items()
+                    if analysis['risk_level'] in ['CRITICAL', 'HIGH']
+                },
+                'supplier_performance': supplier_performance,
+                'recommendations': self._generate_prioritized_recommendations(kpis, insights)
+            }
+            
+            return report
+            
+        except Exception as e:
+            self.logger.error(f"Error creating optimization report: {e}")
+            return self._create_minimal_report(f"Error generating report: {str(e)}")
+    
+    def _create_minimal_report(self, error_message: str) -> Dict[str, Any]:
+        """Create a minimal report when full analysis fails"""
+        return {
+            'report_date': datetime.now().isoformat(),
+            'summary': {
+                'total_products_analyzed': 0,
+                'high_priority_issues': 0,
+                'suppliers_evaluated': 0,
+                'overall_system_health': 'UNKNOWN'
+            },
+            'key_performance_indicators': [],
+            'critical_insights': [{
+                'type': 'SYSTEM_ERROR',
+                'title': 'Report Generation Error',
+                'description': error_message,
+                'impact': 'HIGH',
+                'actions': ['Check system logs', 'Verify data files', 'Restart the system'],
+                'benefit': 'Restored system functionality'
+            }],
+            'stockout_risks': {},
+            'supplier_performance': {},
+            'recommendations': ['Check system configuration', 'Verify data integrity', 'Contact system administrator'],
+            'error': error_message
+        }
+    
+    def _calculate_system_health_score(self, kpis: List[PerformanceMetrics]) -> str:
+        """Calculate overall system health score"""
+        critical_issues = len([kpi for kpi in kpis if kpi.priority == "CRITICAL"])
+        high_issues = len([kpi for kpi in kpis if kpi.priority == "HIGH"])
+        
+        if critical_issues > 0:
+            return "CRITICAL"
+        elif high_issues > 1:
+            return "NEEDS_ATTENTION"
+        elif high_issues == 1:
+            return "GOOD"
+        else:
+            return "EXCELLENT"
+    
+    def _generate_prioritized_recommendations(self, kpis: List[PerformanceMetrics], insights: List[SystemInsight]) -> List[str]:
+        """Generate prioritized list of recommendations"""
+        recommendations = []
+        
+        # Add critical KPI recommendations first
+        for kpi in kpis:
+            if kpi.priority == "CRITICAL":
+                recommendations.append(f"URGENT: {kpi.improvement_suggestion}")
+        
+        # Add high-impact insights
+        for insight in insights:
+            if hasattr(insight, 'impact_level') and insight.impact_level == "HIGH":
+                recommendations.append(f"HIGH IMPACT: {insight.recommended_actions[0]}")
+        
+        # Add other high-priority recommendations
+        for kpi in kpis:
+            if kpi.priority == "HIGH":
+                recommendations.append(f"Important: {kpi.improvement_suggestion}")
+        
+        return recommendations[:10]  # Limit to top 10 recommendations
+    
+    def process(self, action: str = "create_report", **kwargs) -> Any:
+        """Main processing method for the reflector agent"""
+        if action == "create_report":
+            return self.create_optimization_report()
+        elif action == "analyze_kpis":
+            return self.calculate_key_performance_indicators()
+        elif action == "generate_insights":
+            return self.generate_system_insights()
+        elif action == "evaluate_suppliers":
+            return self.evaluate_supplier_performance()
+        elif action == "analyze_stockouts":
+            return self.analyze_stockout_risk()
+        else:
+            raise ValueError(f"Unknown action: {action}")
+
+if __name__ == "__main__":
+    # Test the reflector agent
+    reflector = ReflectorAgent()
+    report = reflector.create_optimization_report()
+    
+    print("System Optimization Report")
+    print("=" * 50)
+    print(f"Report Date: {report['report_date']}")
+    print(f"Overall System Health: {report['summary']['overall_system_health']}")
+    print(f"High Priority Issues: {report['summary']['high_priority_issues']}")
+    
+    print("\nKey Performance Indicators:")
+    for kpi in report['key_performance_indicators']:
+        print(f"- {kpi['metric']}: {kpi['current']:.2f} (Target: {kpi['target']:.2f}) - {kpi['priority']}")
+    
+    print("\nTop Recommendations:")
+    for i, rec in enumerate(report['recommendations'][:5], 1):
+        print(f"{i}. {rec}")
