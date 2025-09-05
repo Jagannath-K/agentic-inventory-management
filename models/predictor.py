@@ -88,15 +88,13 @@ class DemandPredictor:
                 'trend_7d': [0],
                 'volatility_7d': [0],
                 'price_trend': [0],
-                'channel_online_ratio': [0.5],
                 'seasonal_factor': [1.0]
             })
         
-        # Create daily aggregated data
+        # Create daily aggregated data (micro enterprises focus on retail only)
         daily_sales = product_sales.groupby('date').agg({
             'quantity_sold': 'sum',
-            'unit_price': 'mean',
-            'sales_channel': lambda x: (x == 'online').sum() / len(x)
+            'unit_price': 'mean'
         }).reset_index()
         
         # Sort by date
@@ -148,10 +146,7 @@ class DemandPredictor:
             else:
                 features['price_trend'] = 0
             
-            # Channel mix
-            features['channel_online_ratio'] = row['sales_channel']
-            
-            # Seasonal factors (simplified - based on month)
+            # Seasonal factors (simplified - based on month for Indian market)
             seasonal_multipliers = {
                 1: 0.9, 2: 0.8, 3: 0.9, 4: 1.0, 5: 1.1, 6: 1.2,
                 7: 1.3, 8: 1.2, 9: 1.0, 10: 1.1, 11: 1.3, 12: 1.4

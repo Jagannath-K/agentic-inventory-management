@@ -653,8 +653,8 @@ def create_demand_forecasting_dashboard():
 
 def create_daily_sales_entry():
     """Create daily sales entry interface for grocery store owner"""
-    st.markdown('<h1 class="main-header">🛒 Daily Sales Entry</h1>', unsafe_allow_html=True)
-    st.markdown("**Enter your daily sales to keep inventory updated and improve AI predictions**")
+    st.markdown('<h1 class="main-header">🛒 Daily Sales & Stock Management</h1>', unsafe_allow_html=True)
+    st.markdown("**Manage your daily sales and stock refills to keep inventory updated and improve AI predictions**")
     
     # Load current data
     sales_data, stock_data, suppliers_data = load_data()
@@ -664,7 +664,7 @@ def create_daily_sales_entry():
         return
     
     # Create tabs for different entry methods
-    tab1, tab2 = st.tabs([" Sales Entry", "📊 Today's Summary"])
+    tab1, tab2, tab3 = st.tabs(["📝 Sales Entry", "📊 Today's Summary", "📦 Stock Refill"])
     
     with tab1:
         st.subheader("Sales Entry")
@@ -673,7 +673,7 @@ def create_daily_sales_entry():
         if 'bulk_entries' not in st.session_state:
             st.session_state.bulk_entries = []
         
-        col1, col2, col3, col4, col5 = st.columns([2, 1, 1, 1, 1])
+        col1, col2, col3, col4 = st.columns([3, 2, 2, 2])
         
         with col1:
             bulk_product = st.selectbox(
@@ -689,9 +689,6 @@ def create_daily_sales_entry():
             bulk_price = st.number_input("Price ₹", min_value=0.0, value=100.0, key="bulk_price")
         
         with col4:
-            bulk_channel = st.selectbox("Channel", ["retail", "wholesale", "online"], key="bulk_channel")
-        
-        with col5:
             if st.button("➕ Add", key="add_bulk"):
                 product_info = stock_data[stock_data['product_name'] == bulk_product].iloc[0]
                 st.session_state.bulk_entries.append({
@@ -699,7 +696,6 @@ def create_daily_sales_entry():
                     'product_name': bulk_product,
                     'quantity': bulk_qty,
                     'price': bulk_price,
-                    'channel': bulk_channel,
                     'total': bulk_qty * bulk_price
                 })
                 st.rerun()
@@ -719,8 +715,7 @@ def create_daily_sales_entry():
                         if add_sale_to_system(
                             entry['product_id'], entry['product_name'], 
                             entry['quantity'], entry['price'],
-                            f"C{datetime.now().strftime('%Y%m%d%H%M%S')}", 
-                            entry['channel']
+                            f"C{datetime.now().strftime('%Y%m%d%H%M%S')}"
                         ):
                             success_count += 1
                     
@@ -790,17 +785,114 @@ def create_daily_sales_entry():
                     st.plotly_chart(fig, use_container_width=True)
                 
             else:
-                st.info("No sales recorded for today yet. Start adding sales using the Quick Entry tab!")
+                st.info("No sales recorded for today yet. Start adding sales using the Sales Entry tab!")
         else:
             st.info("No sales data available. Start recording your first sale!")
 
+    with tab3:
+        st.subheader("📦 Stock Refill Management")
+        st.markdown("**Add new stock when you receive deliveries from suppliers**")
+        
+        # Initialize session state for stock refill entries
+        if 'refill_entries' not in st.session_state:
+            st.session_state.refill_entries = []
+        
+        col1, col2, col3, col4 = st.columns([3, 2, 2, 2])
+        
+        with col1:
+            refill_product = st.selectbox(
+                "Product to Refill",
+                options=stock_data['product_name'].tolist(),
+                key="refill_product"
+            )
+        
+        with col2:
+            refill_qty = st.number_input("Quantity Received", min_value=1, value=10, key="refill_qty")
+        
+        with col3:
+            refill_cost = st.number_input("Total Cost ₹", min_value=0.0, value=500.0, key="refill_cost")
+        
+        with col4:
+            if st.button("➕ Add Refill", key="add_refill"):
+                product_info = stock_data[stock_data['product_name'] == refill_product].iloc[0]
+                unit_cost = refill_cost / refill_qty
+                st.session_state.refill_entries.append({
+                    'product_id': product_info['product_id'],
+                    'product_name': refill_product,
+                    'quantity': refill_qty,
+                    'total_cost': refill_cost,
+                    'unit_cost': unit_cost,
+                    'current_stock': product_info['current_stock'],
+                    'new_stock': product_info['current_stock'] + refill_qty
+                })
+                st.rerun()
+        
+        # Display pending refill entries
+        if st.session_state.refill_entries:
+            st.markdown("#### Pending Stock Refills")
+            refill_df = pd.DataFrame(st.session_state.refill_entries)
+            
+            # Format the display
+            display_df = refill_df.copy()
+            display_df['Unit Cost'] = display_df['unit_cost'].apply(lambda x: f"₹{x:.2f}")
+            display_df['Total Cost'] = display_df['total_cost'].apply(lambda x: f"₹{x:.2f}")
+            display_df = display_df[['product_name', 'quantity', 'current_stock', 'new_stock', 'Unit Cost', 'Total Cost']]
+            display_df.columns = ['Product', 'Qty Added', 'Current Stock', 'New Stock', 'Unit Cost', 'Total Cost']
+            
+            st.dataframe(display_df, use_container_width=True)
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                if st.button("📦 Process All Refills", type="primary"):
+                    success_count = 0
+                    for entry in st.session_state.refill_entries:
+                        if add_stock_refill(
+                            entry['product_id'], 
+                            entry['quantity'], 
+                            entry['unit_cost']
+                        ):
+                            success_count += 1
+                    
+                    st.success(f"✅ Processed {success_count} stock refills!")
+                    st.session_state.refill_entries = []
+                    st.cache_data.clear()
+                    st.rerun()
+            
+            with col2:
+                if st.button("🗑️ Clear All Refills"):
+                    st.session_state.refill_entries = []
+                    st.rerun()
+            
+            with col3:
+                total_cost = sum(entry['total_cost'] for entry in st.session_state.refill_entries)
+                st.metric("Total Investment", f"₹{total_cost:.2f}")
+        
+        # Stock status overview
+        st.markdown("#### Current Stock Status")
+        
+        # Create stock status display
+        stock_display = stock_data.copy()
+        stock_display['Status'] = stock_display.apply(lambda row: 
+            '🔴 Critical' if row['current_stock'] <= row['reorder_point'] * 0.5 
+            else '🟡 Low' if row['current_stock'] <= row['reorder_point']
+            else '🟢 Good', axis=1)
+        
+        stock_display['Value'] = (stock_display['current_stock'] * stock_display['unit_cost']).apply(lambda x: f"₹{x:.2f}")
+        
+        display_cols = ['product_name', 'current_stock', 'reorder_point', 'Status', 'Value']
+        display_stock = stock_display[display_cols]
+        display_stock.columns = ['Product', 'Current Stock', 'Reorder Point', 'Status', 'Value']
+        
+        st.dataframe(display_stock, use_container_width=True)
+
 def add_sale_to_system(product_id: str, product_name: str, quantity: int, 
-                      selling_price: float, customer_id: str, sales_channel: str) -> bool:
+                      selling_price: float, customer_id: str) -> bool:
     """Add a sale to the system and update stock levels"""
     try:
         import time
         
-        # Create new sale record
+        # Create new sale record (micro enterprises use retail channel by default)
         new_sale = {
             'date': datetime.now().strftime('%Y-%m-%d'),
             'product_id': product_id,
@@ -808,7 +900,7 @@ def add_sale_to_system(product_id: str, product_name: str, quantity: int,
             'quantity_sold': quantity,
             'unit_price': selling_price,
             'customer_id': customer_id,
-            'sales_channel': sales_channel,
+            'sales_channel': 'retail',  # Default for micro enterprises
             'price': ''  # Keep empty for compatibility
         }
         
@@ -854,6 +946,37 @@ def add_sale_to_system(product_id: str, product_name: str, quantity: int,
         st.error(f"Error adding sale: {e}")
         return False
 
+def add_stock_refill(product_id: str, quantity: int, unit_cost: float) -> bool:
+    """Add stock refill to the system and update stock levels"""
+    try:
+        # Load current stock data
+        stock_data = pd.read_csv('data/stock.csv')
+        
+        # Find the product
+        product_mask = stock_data['product_id'] == product_id
+        
+        if product_mask.any():
+            idx = stock_data[product_mask].index[0]
+            current_stock = stock_data.loc[idx, 'current_stock']
+            new_stock = current_stock + quantity
+            
+            # Update stock data
+            stock_data.loc[idx, 'current_stock'] = new_stock
+            stock_data.loc[idx, 'unit_cost'] = unit_cost  # Update unit cost with latest purchase price
+            stock_data.loc[idx, 'last_updated'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            
+            # Save updated stock data
+            stock_data.to_csv('data/stock.csv', index=False)
+            
+            return True
+        else:
+            st.error(f"Product {product_id} not found in stock data.")
+            return False
+            
+    except Exception as e:
+        st.error(f"Error adding stock refill: {e}")
+        return False
+
 def process_bulk_sales(bulk_sales_df: pd.DataFrame) -> int:
     """Process bulk sales from uploaded file"""
     success_count = 0
@@ -872,8 +995,7 @@ def process_bulk_sales(bulk_sales_df: pd.DataFrame) -> int:
                     product_name,
                     int(row['quantity_sold']),
                     float(row['unit_price']),
-                    row.get('customer_id', f"C{datetime.now().strftime('%Y%m%d%H%M%S')}"),
-                    row.get('sales_channel', 'retail')
+                    row.get('customer_id', f"C{datetime.now().strftime('%Y%m%d%H%M%S')}")
                 ):
                     success_count += 1
         except Exception as e:
