@@ -59,7 +59,7 @@ class PlannerAgent(BaseAgent):
         try:
             self.sales_data = pd.read_csv('data/sales.csv')
             self.stock_data = pd.read_csv('data/stock.csv')
-            self.supplier_data = pd.read_csv('data/suppliers.csv')
+            # Removed supplier data loading - using single supplier for all items
             
             # Convert date columns with error handling
             self.sales_data['date'] = pd.to_datetime(self.sales_data['date'], errors='coerce')
@@ -149,13 +149,11 @@ class PlannerAgent(BaseAgent):
     
     def calculate_optimal_reorder_point(self, product_id: str) -> Tuple[int, str]:
         """Calculate optimal reorder point and timing"""
-        # Get supplier info for lead time
+        # Get product info
         product_info = self.stock_data[self.stock_data['product_id'] == product_id].iloc[0]
-        supplier_info = self.supplier_data[
-            self.supplier_data['supplier_id'] == product_info['supplier_id']
-        ].iloc[0]
         
-        lead_time = supplier_info['delivery_time_days']
+        # Use standard lead time since we don't have supplier data
+        lead_time = 3  # Standard 3-day lead time for local suppliers
         
         # Get demand analysis
         demand_analysis = self.analyze_demand_patterns(product_id)
@@ -204,13 +202,10 @@ class PlannerAgent(BaseAgent):
         else:
             eoq = product_info['max_stock'] - product_info['current_stock']
         
-        # Ensure minimum order requirements
-        supplier_info = self.supplier_data[
-            self.supplier_data['supplier_id'] == product_info['supplier_id']
-        ].iloc[0]
-        min_order = supplier_info['minimum_order'] / unit_cost  # Convert to units
+        # Ensure minimum order requirements (use default since no supplier data)
+        min_order = 10  # Default minimum order quantity
         
-        optimal_quantity = max(int(eoq), int(min_order))
+        optimal_quantity = max(int(eoq), min_order)
         
         # Don't exceed maximum stock capacity
         max_order = product_info['max_stock'] - product_info['current_stock']

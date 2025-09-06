@@ -154,13 +154,13 @@ def load_data():
     try:
         sales_data = pd.read_csv('data/sales.csv')
         stock_data = pd.read_csv('data/stock.csv')
-        suppliers_data = pd.read_csv('data/suppliers.csv')
+        # Removed supplier data loading - using single supplier for all items
         
         # Parse dates with modern pandas approach
         sales_data['date'] = pd.to_datetime(sales_data['date'], errors='coerce')
         stock_data['last_updated'] = pd.to_datetime(stock_data['last_updated'], errors='coerce')
         
-        return sales_data, stock_data, suppliers_data
+        return sales_data, stock_data
     except Exception as e:
         st.error(f"Error loading data: {e}")
         return None, None, None
@@ -186,7 +186,7 @@ def create_overview_dashboard():
     st.markdown('<h1 class="main-header">📦 Agentic Inventory Management System</h1>', unsafe_allow_html=True)
     
     # Load data
-    sales_data, stock_data, suppliers_data = load_data()
+    sales_data, stock_data = load_data()
     
     if sales_data is None:
         st.error("Unable to load data. Please check data files.")
@@ -615,7 +615,7 @@ def create_demand_forecasting_dashboard():
         return
     
     # Load data
-    sales_data, stock_data, suppliers_data = load_data()
+    sales_data, stock_data = load_data()
     
     if stock_data is None:
         return
@@ -741,7 +741,7 @@ def create_daily_sales_entry():
     st.markdown("**Manage your daily sales and stock refills to keep inventory updated and improve AI predictions**")
     
     # Load current data
-    sales_data, stock_data, suppliers_data = load_data()
+    sales_data, stock_data = load_data()
     
     if stock_data is None:
         st.error("Unable to load stock data. Please check data files.")
@@ -770,7 +770,11 @@ def create_daily_sales_entry():
             bulk_qty = st.number_input("Qty", min_value=1, value=1, key="bulk_qty")
         
         with col3:
-            bulk_price = st.number_input("Price ₹", min_value=0.0, value=100.0, key="bulk_price")
+            # Get fixed price from stock data - user cannot modify
+            product_info = stock_data[stock_data['product_name'] == bulk_product].iloc[0]
+            fixed_price = product_info['unit_cost']
+            st.number_input("Price ₹ (Fixed)", min_value=0.0, value=float(fixed_price), key="bulk_price", disabled=True, help="Prices are fixed and cannot be changed")
+            bulk_price = fixed_price  # Use the fixed price from stock data
         
         with col4:
             if st.button("➕ Add", key="add_bulk"):
@@ -894,18 +898,21 @@ def create_daily_sales_entry():
             refill_qty = st.number_input("Quantity Received", min_value=1, value=10, key="refill_qty")
         
         with col3:
-            refill_cost = st.number_input("Total Cost ₹", min_value=0.0, value=500.0, key="refill_cost")
+            # Auto-calculate cost based on existing unit cost
+            product_info = stock_data[stock_data['product_name'] == refill_product].iloc[0]
+            calculated_cost = refill_qty * product_info['unit_cost']
+            st.metric("Total Cost ₹", f"₹{calculated_cost:.2f}", help="Auto-calculated: Quantity × Unit Cost")
         
         with col4:
             if st.button("➕ Add Refill", key="add_refill"):
                 product_info = stock_data[stock_data['product_name'] == refill_product].iloc[0]
-                unit_cost = refill_cost / refill_qty
+                total_cost = refill_qty * product_info['unit_cost']
                 st.session_state.refill_entries.append({
                     'product_id': product_info['product_id'],
                     'product_name': refill_product,
                     'quantity': refill_qty,
-                    'total_cost': refill_cost,
-                    'unit_cost': unit_cost,
+                    'total_cost': total_cost,
+                    'unit_cost': product_info['unit_cost'],  # Use existing unit cost
                     'current_stock': product_info['current_stock'],
                     'new_stock': product_info['current_stock'] + refill_qty
                 })

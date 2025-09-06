@@ -40,5 +40,14 @@
     "errors": [
       "time data \"2024-01-10\" doesn't match format \"%Y-%m-%d %H:%M:%S\", at position 1. You might want to try:\n    - passing `format` if your strings have a consistent format;\n    - passing `format='ISO8601'` if your strings are all ISO8601 but not necessarily in exactly the same format;\n    - passing `format='mixed'`, and the format will be inferred for each element individually. You might want to use `dayfirst` alongside this."
     ]
+  },
+  {
+    "timestamp": "2025-09-05T19:22:06.512974",
+    "plans_generated": 20,
+    "orders_executed": 1,
+    "total_cost": 8480.341801807317,
+    "insights_generated": 2,
+    "success": true,
+    "errors": []
   }
 ]

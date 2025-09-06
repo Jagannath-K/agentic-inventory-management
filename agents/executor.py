@@ -63,7 +63,7 @@ class ExecutorAgent(BaseAgent):
         """Load necessary data for execution"""
         try:
             self.stock_data = pd.read_csv('data/stock.csv')
-            self.supplier_data = pd.read_csv('data/suppliers.csv')
+            # Removed supplier data loading - using single supplier for all items
             # Parse dates with error handling for mixed formats
             self.stock_data['last_updated'] = pd.to_datetime(self.stock_data['last_updated'], errors='coerce')
             self.logger.info("Executor data loaded successfully")
@@ -163,14 +163,13 @@ class ExecutorAgent(BaseAgent):
         self.order_counter += 1
         
         try:
+            # Use fixed pricing - no random variations for consistency
+            actual_cost = order_request.estimated_cost
+            
             # Send order email to supplier
-            success = self.send_order_email(order_request, order_id)
+            success = self.send_order_email(order_request, order_id, actual_cost)
             
             if success:
-                # Add some random variation to cost
-                cost_variation = np.random.uniform(0.98, 1.02)
-                actual_cost = order_request.estimated_cost * cost_variation
-                
                 result = OrderResult(
                     order_id=order_id,
                     success=True,
@@ -206,9 +205,8 @@ class ExecutorAgent(BaseAgent):
         self.order_counter += 1
         
         try:
-            # Add some random variation to cost
-            cost_variation = np.random.uniform(0.98, 1.02)
-            actual_cost = order_request.estimated_cost * cost_variation
+            # Use fixed pricing - no random variations for consistency
+            actual_cost = order_request.estimated_cost
             
             result = OrderResult(
                 order_id=order_id,
@@ -230,25 +228,31 @@ class ExecutorAgent(BaseAgent):
         
         return result
     
-    def send_order_email(self, order_request: OrderRequest, order_id: str) -> bool:
+    def send_order_email(self, order_request: OrderRequest, order_id: str, actual_cost: float = None) -> bool:
         """Send order email to supplier - individual order (deprecated, use send_consolidated_order_email)"""
         # This method is kept for compatibility but consolidated email is preferred
-        return self.send_consolidated_order_email([order_request], [order_id])
+        if actual_cost is None:
+            actual_cost = order_request.estimated_cost
+        return self.send_consolidated_order_email([order_request], [order_id], [actual_cost])
     
-    def send_consolidated_order_email(self, order_requests: List[OrderRequest], order_ids: List[str]) -> bool:
+    def send_consolidated_order_email(self, order_requests: List[OrderRequest], order_ids: List[str], actual_costs: List[float] = None) -> bool:
         """Send consolidated order email with all orders in a single table"""
         try:
             if not order_requests:
                 return True
                 
+            # Use actual costs if provided, otherwise use estimated costs
+            if actual_costs is None:
+                actual_costs = [req.estimated_cost for req in order_requests]
+                
             # Create email subject
             order_count = len(order_requests)
-            total_value = sum(req.estimated_cost for req in order_requests)
+            total_value = sum(actual_costs)
             subject = f"📦 Purchase Order - {order_count} Items (₹{total_value:,.2f}) - {datetime.now().strftime('%Y-%m-%d')}"
             
             # Create consolidated order table
             order_rows = ""
-            for i, (order_request, order_id) in enumerate(zip(order_requests, order_ids), 1):
+            for i, (order_request, order_id, actual_cost) in enumerate(zip(order_requests, order_ids, actual_costs), 1):
                 order_rows += f"""
                 <tr style="border-bottom: 1px solid #ddd;">
                     <td style="padding: 12px; text-align: center; font-weight: bold;">{i}</td>
@@ -256,7 +260,7 @@ class ExecutorAgent(BaseAgent):
                     <td style="padding: 12px; text-align: center; font-family: monospace; color: #666;">{order_request.product_id}</td>
                     <td style="padding: 12px; font-weight: bold;">{order_request.product_name}</td>
                     <td style="padding: 12px; text-align: center; font-size: 16px; font-weight: bold;">{order_request.quantity}</td>
-                    <td style="padding: 12px; text-align: right; font-weight: bold; color: #2e7d32;">₹{order_request.estimated_cost:,.2f}</td>
+                    <td style="padding: 12px; text-align: right; font-weight: bold; color: #2e7d32;">₹{actual_cost:,.2f}</td>
                     <td style="padding: 12px; text-align: center;">
                         <span style="padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; 
                         {'background-color: #ffcdd2; color: #b71c1c;' if order_request.priority == 'CRITICAL' 
@@ -300,7 +304,7 @@ class ExecutorAgent(BaseAgent):
                             <h3 style="margin-top: 0; color: #1f77b4;">📊 Order Summary</h3>
                             <ul style="margin: 10px 0; padding-left: 20px;">
                                 <li><strong>Total Items:</strong> {order_count} products</li>
-                                <li><strong>Total Estimated Value:</strong> ₹{total_value:,.2f}</li>
+                                <li><strong>Total Order Value:</strong> ₹{total_value:,.2f}</li>
                                 <li><strong>Order Date:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</li>
                                 <li><strong>Request Type:</strong> AI-Optimized Inventory Replenishment</li>
                             </ul>
@@ -544,6 +548,7 @@ class ExecutorAgent(BaseAgent):
         all_order_requests = []
         all_order_ids = []
         all_order_results = []
+        all_actual_costs = []
         
         # Process urgent plans first
         self.logger.info(f"Processing {len(urgent_plans)} urgent inventory plans")
@@ -556,11 +561,13 @@ class ExecutorAgent(BaseAgent):
                 results['urgent_executed'] += 1
                 if order_result.success:
                     results['successful_orders'] += 1
-                    results['total_cost'] += order_result.actual_cost or order_request.estimated_cost
+                    actual_cost = order_result.actual_cost or order_request.estimated_cost
+                    results['total_cost'] += actual_cost
                     # Collect successful orders for consolidated email
                     all_order_requests.append(order_request)
                     all_order_ids.append(order_result.order_id)
                     all_order_results.append(order_result)
+                    all_actual_costs.append(actual_cost)
                 else:
                     results['failed_orders'] += 1
                 
@@ -585,11 +592,13 @@ class ExecutorAgent(BaseAgent):
                 results['medium_executed'] += 1
                 if order_result.success:
                     results['successful_orders'] += 1
-                    results['total_cost'] += order_result.actual_cost or order_request.estimated_cost
+                    actual_cost = order_result.actual_cost or order_request.estimated_cost
+                    results['total_cost'] += actual_cost
                     # Collect successful orders for consolidated email
                     all_order_requests.append(order_request)
                     all_order_ids.append(order_result.order_id)
                     all_order_results.append(order_result)
+                    all_actual_costs.append(actual_cost)
                 else:
                     results['failed_orders'] += 1
                 
@@ -604,7 +613,7 @@ class ExecutorAgent(BaseAgent):
         # Send consolidated email with all successful orders
         if all_order_requests:
             self.logger.info(f"Sending consolidated email for {len(all_order_requests)} orders")
-            email_success = self.send_consolidated_order_email(all_order_requests, all_order_ids)
+            email_success = self.send_consolidated_order_email(all_order_requests, all_order_ids, all_actual_costs)
             
             if email_success:
                 results['consolidated_email_sent'] = True
@@ -618,7 +627,7 @@ class ExecutorAgent(BaseAgent):
         
         self.logger.info(
             f"Execution complete: {results['successful_orders']} successful, "
-            f"{results['failed_orders']} failed, Total cost: ${results['total_cost']:.2f}"
+            f"{results['failed_orders']} failed, Total cost: ₹{results['total_cost']:.2f}"
         )
         
         return results
@@ -652,7 +661,7 @@ if __name__ == "__main__":
     print("\nExecution Results:")
     print(f"Successful orders: {results['successful_orders']}")
     print(f"Failed orders: {results['failed_orders']}")
-    print(f"Total cost: ${results['total_cost']:.2f}")
+    print(f"Total cost: ₹{results['total_cost']:.2f}")
     
     print("\nOrder Details:")
     for order in results['order_details']:

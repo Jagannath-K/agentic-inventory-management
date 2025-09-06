@@ -9180,3 +9180,7 @@ date,product_id,product_name,quantity_sold,unit_price,customer_id,price,sales_ch
 2025-09-05,G006,Milk Packet 500ml,2,100.02,C20250905161035,,retail
 2025-09-05,G007,Bread White 400g,1,150.05,C20250905161104,,retail
 2025-09-05,G005,Oil Sunflower 1L,1,100.0,C20250905161136,,retail
+2025-09-05,G009,Tea Powder 250g,5,100.0,C20250905163818,,retail
+2025-09-05,G009,Tea Powder 250g,3,100.0,C20250905163855,,retail
+2025-09-05,G005,Oil Sunflower 1L,2,140.0,C20250905210531,,retail
+2025-09-05,G001,Rice Basmati 1kg,7,85.0,C20250905213024,,retail
