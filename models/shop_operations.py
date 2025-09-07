@@ -134,8 +134,7 @@ class ShopOperations:
                 'product_id': product_id,
                 'product_name': product_name,
                 'current_stock': new_stock,
-                'threshold': reorder_point,
-                'supplier_id': stock_df.loc[product_mask, 'supplier_id'].iloc[0]
+                'threshold': reorder_point
             }
         
         return {
@@ -248,8 +247,7 @@ class ShopOperations:
                     'product_id': row['product_id'],
                     'product_name': row['product_name'],
                     'current_stock': row['current_stock'],
-                    'threshold': row['reorder_point'],
-                    'supplier_id': row['supplier_id']
+                    'threshold': row['reorder_point']
                 })
             
             return low_stock_items
@@ -274,7 +272,6 @@ class ShopOperations:
                     'current_stock': row['current_stock'],
                     'reorder_point': row['reorder_point'],
                     'unit_cost': row['unit_cost'],
-                    'supplier_id': row['supplier_id'],
                     'last_updated': row['last_updated']
                 })
             

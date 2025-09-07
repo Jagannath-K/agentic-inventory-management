@@ -14,7 +14,7 @@ def analyze_grocery_data():
     # Load and analyze sales data
     sales_df = pd.read_csv('data/sales.csv')
     stock_df = pd.read_csv('data/stock.csv')
-    suppliers_df = pd.read_csv('data/suppliers.csv')
+    # Removed supplier data loading - no longer used
     
     # Convert date column
     sales_df['date'] = pd.to_datetime(sales_df['date'])
@@ -26,7 +26,7 @@ def analyze_grocery_data():
     print(f"   Average Order Value: ₹{sales_df['unit_price'].mean():.2f}")
     print(f"   Date Range: {sales_df['date'].min().date()} to {sales_df['date'].max().date()}")
     print(f"   Total Products: {len(stock_df)}")
-    print(f"   Total Suppliers: {len(suppliers_df)}")
+    print(f"   Single Supplier: All items sourced locally")
     
     # Category analysis
     print(f"\n🏷️ PRODUCT CATEGORIES:")

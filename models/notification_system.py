@@ -103,7 +103,6 @@ class NotificationSystem:
                         <li><strong>Current Stock:</strong> <span class="urgent">{item['current_stock']} units</span></li>
                         <li><strong>Reorder Threshold:</strong> {item['threshold']} units</li>
                         <li><strong>Unit Cost:</strong> ₹{item.get('unit_cost', 'N/A')}</li>
-                        <li><strong>Supplier ID:</strong> {item['supplier_id']}</li>
                         <li><strong>Alert Time:</strong> {current_time}</li>
                     </ul>
                 </div>
@@ -112,7 +111,7 @@ class NotificationSystem:
                     <h3>🎯 Recommended Actions for Grocery Retail:</h3>
                     <ul>
                         <li>📊 Review recent sales patterns and customer demand trends</li>
-                        <li>📞 Contact supplier {item['supplier_id']} immediately to place reorder</li>
+                        <li>📞 Contact your supplier immediately to place reorder</li>
                         <li>🧮 Consider bulk purchasing for better margins (if applicable)</li>
                         <li>📅 Check for seasonal demand patterns (festivals, month-end shopping)</li>
                         <li>🔍 Monitor competitor pricing for this category</li>

@@ -26,7 +26,6 @@ class OrderRequest:
     product_id: str
     product_name: str
     quantity: int
-    supplier_id: str
     estimated_cost: float
     priority: str
     requested_date: datetime
@@ -113,7 +112,6 @@ class ExecutorAgent(BaseAgent):
             product_id=plan.product_id,
             product_name=plan.product_name,
             quantity=order_quantity,  # Use predicted demand-based quantity
-            supplier_id="SINGLE_SUPPLIER",  # Single supplier for all orders
             estimated_cost=estimated_cost,
             priority=plan.urgency_level,
             requested_date=datetime.now(),
@@ -437,7 +435,6 @@ class ExecutorAgent(BaseAgent):
             'product_id': order_request.product_id,
             'product_name': order_request.product_name,
             'quantity': order_request.quantity,
-            'supplier_id': order_request.supplier_id,
             'estimated_cost': order_request.estimated_cost,
             'actual_cost': order_result.actual_cost,
             'priority': order_request.priority,

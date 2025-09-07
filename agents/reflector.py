@@ -171,56 +171,39 @@ class ReflectorAgent(BaseAgent):
         return stockout_analysis
     
     def evaluate_supplier_performance(self) -> Dict[str, Dict[str, Any]]:
-        """Evaluate supplier performance based on order history"""
+        """Evaluate supplier performance based on order history - simplified for single supplier"""
         if not self.order_log:
             return {}
         
-        supplier_performance = {}
+        # Since we have a single supplier, analyze all orders together
+        total_orders = len(self.order_log)
+        successful_orders = len([o for o in self.order_log if o['success']])
+        success_rate = successful_orders / total_orders if total_orders > 0 else 0
         
-        # Group orders by supplier
-        supplier_orders = {}
+        # Calculate average cost variance
+        cost_variances = []
         for order in self.order_log:
-            supplier_id = order['supplier_id']
-            if supplier_id not in supplier_orders:
-                supplier_orders[supplier_id] = []
-            supplier_orders[supplier_id].append(order)
+            if order['success'] and order['actual_cost'] and order['estimated_cost']:
+                cost_variance = (order['actual_cost'] - order['estimated_cost']) / order['estimated_cost']
+                cost_variances.append(cost_variance)
         
-        # Analyze each supplier
-        for supplier_id, orders in supplier_orders.items():
-            total_orders = len(orders)
-            successful_orders = len([o for o in orders if o['success']])
-            success_rate = successful_orders / total_orders if total_orders > 0 else 0
-            
-            # Calculate average cost variance
-            cost_variances = []
-            delivery_variances = []
-            
-            for order in orders:
-                if order['success'] and order['actual_cost'] and order['estimated_cost']:
-                    cost_variance = (order['actual_cost'] - order['estimated_cost']) / order['estimated_cost']
-                    cost_variances.append(cost_variance)
-                
-                if (order['success'] and order['estimated_delivery'] and 
-                    order['expected_delivery']):
-                    # Calculate delivery variance (simplified)
-                    delivery_variances.append(0)  # Placeholder for actual calculation
-            
-            avg_cost_variance = np.mean(cost_variances) if cost_variances else 0
-            
-            # Performance scoring
-            performance_score = (
-                success_rate * 0.5 +  # Success rate weight: 50%
-                max(0, 1 - abs(avg_cost_variance)) * 0.3 +  # Cost accuracy weight: 30%
-                0.8 * 0.2  # Delivery performance weight: 20% (simplified)
-            )
-            
-            supplier_performance[supplier_id] = {
+        avg_cost_variance = np.mean(cost_variances) if cost_variances else 0
+        
+        # Performance scoring
+        performance_score = (
+            success_rate * 0.6 +  # Success rate weight: 60%
+            max(0, 1 - abs(avg_cost_variance)) * 0.4  # Cost accuracy weight: 40%
+        )
+        
+        supplier_performance = {
+            'SINGLE_SUPPLIER': {
                 'total_orders': total_orders,
                 'success_rate': success_rate,
                 'avg_cost_variance': avg_cost_variance,
                 'performance_score': performance_score,
                 'recommended_action': self._get_supplier_recommendation(performance_score)
             }
+        }
         
         return supplier_performance
     
@@ -501,25 +484,169 @@ class ReflectorAgent(BaseAgent):
             return "EXCELLENT"
     
     def _generate_prioritized_recommendations(self, kpis: List[PerformanceMetrics], insights: List[SystemInsight]) -> List[str]:
-        """Generate prioritized list of recommendations"""
+        """Generate specific, data-driven recommendations based on actual inventory conditions"""
         recommendations = []
         
         # Add critical KPI recommendations first
         for kpi in kpis:
             if kpi.priority == "CRITICAL":
-                recommendations.append(f"URGENT: {kpi.improvement_suggestion}")
+                recommendations.append(f"🚨 URGENT: {kpi.improvement_suggestion}")
         
         # Add high-impact insights
         for insight in insights:
             if hasattr(insight, 'impact_level') and insight.impact_level == "HIGH":
-                recommendations.append(f"HIGH IMPACT: {insight.recommended_actions[0]}")
+                recommendations.append(f"⚡ HIGH IMPACT: {insight.recommended_actions[0]}")
         
         # Add other high-priority recommendations
         for kpi in kpis:
             if kpi.priority == "HIGH":
-                recommendations.append(f"Important: {kpi.improvement_suggestion}")
+                recommendations.append(f"📊 Important: {kpi.improvement_suggestion}")
         
-        return recommendations[:10]  # Limit to top 10 recommendations
+        # Generate specific recommendations based on current data analysis
+        specific_recommendations = self._generate_specific_recommendations()
+        recommendations.extend(specific_recommendations)
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_recommendations = []
+        for rec in recommendations:
+            if rec not in seen:
+                seen.add(rec)
+                unique_recommendations.append(rec)
+        
+        return unique_recommendations[:6]  # Limit to top 6 recommendations
+    
+    def _generate_specific_recommendations(self) -> List[str]:
+        """Generate specific, actionable recommendations based on current inventory data"""
+        recommendations = []
+        
+        if self.stock_data is None or self.sales_data is None:
+            return recommendations
+        
+        # 1. Analyze products with low stock relative to demand
+        for _, product in self.stock_data.iterrows():
+            product_id = product['product_id']
+            product_name = product['product_name']
+            current_stock = product['current_stock']
+            reorder_point = product['reorder_point']
+            max_stock = product['max_stock']
+            
+            # Calculate recent demand velocity
+            recent_sales = self.sales_data[
+                (self.sales_data['product_id'] == product_id) &
+                (self.sales_data['date'] >= datetime.now() - timedelta(days=14))
+            ]['quantity_sold'].sum()
+            
+            daily_velocity = recent_sales / 14 if recent_sales > 0 else 0
+            days_of_stock = current_stock / daily_velocity if daily_velocity > 0 else float('inf')
+            
+            # Specific low stock recommendations
+            if current_stock <= reorder_point and daily_velocity > 0:
+                urgency = "within 3 days" if days_of_stock <= 3 else f"in {days_of_stock:.0f} days"
+                recommendations.append(
+                    f"� Reorder {product_name} immediately - current stock ({current_stock}) will run out {urgency} at current sales pace"
+                )
+            
+            # Overstocking recommendations
+            elif current_stock > max_stock * 0.8 and daily_velocity > 0 and days_of_stock > 30:
+                recommendations.append(
+                    f"📉 Reduce orders for {product_name} - overstocked with {days_of_stock:.0f} days of inventory (target: 15-20 days)"
+                )
+        
+        # 2. Seasonal and category-specific recommendations
+        current_month = datetime.now().month
+        
+        # Festival season recommendations (September-November in India)
+        # Focus on items actually used during festivals
+        if current_month in [9, 10, 11]:
+            # Items that genuinely increase during festivals: staples for cooking, dairy for sweets, oil for frying
+            festival_products = self.stock_data[
+                self.stock_data['category'].isin(['Staples', 'Dairy']) |
+                self.stock_data['product_name'].str.contains('Oil|Ghee|Sugar', case=False, na=False)
+            ]
+            
+            for _, product in festival_products.iterrows():
+                product_name = product['product_name']
+                current_stock = product['current_stock']
+                max_stock = product['max_stock']
+                
+                # Only recommend if significantly under capacity and it's a logical festival item
+                if current_stock < max_stock * 0.5:  # Less than 50% of max capacity
+                    if any(item in product_name.lower() for item in ['rice', 'flour', 'sugar', 'oil', 'ghee', 'milk']):
+                        recommendations.append(
+                            f"🎆 Increase {product_name} stock for festival season - demand rises 25-40% during Sept-Nov for cooking/sweets"
+                        )
+        
+        # 3. High turnover products recommendations
+        turnover_ratios = self.calculate_inventory_turnover()
+        for product_id, turnover in turnover_ratios.items():
+            if turnover > 12:  # Very high turnover (monthly+)
+                product_info = self.stock_data[self.stock_data['product_id'] == product_id].iloc[0]
+                product_name = product_info['product_name']
+                current_stock = product_info['current_stock']
+                reorder_point = product_info['reorder_point']
+                
+                if current_stock < reorder_point * 1.5:
+                    recommendations.append(
+                        f"⚡ {product_name} is fast-moving (turnover: {turnover:.1f}x/year) - consider increasing safety stock by 25% to prevent stockouts"
+                    )
+        
+        # 4. Slow-moving products recommendations
+        for product_id, turnover in turnover_ratios.items():
+            if turnover < 2:  # Very slow turnover
+                product_info = self.stock_data[self.stock_data['product_id'] == product_id].iloc[0]
+                product_name = product_info['product_name']
+                current_stock = product_info['current_stock']
+                unit_cost = product_info['unit_cost']
+                tied_capital = current_stock * unit_cost
+                
+                if tied_capital > 1000:  # Significant capital tied up
+                    recommendations.append(
+                        f"� {product_name} has slow turnover ({turnover:.1f}x/year) with ₹{tied_capital:.0f} tied up - consider promotional pricing or smaller orders"
+                    )
+        
+        # 5. Cost optimization recommendations
+        high_value_products = self.stock_data[self.stock_data['unit_cost'] > 200]
+        for _, product in high_value_products.iterrows():
+            product_name = product['product_name']
+            current_stock = product['current_stock']
+            unit_cost = product['unit_cost']
+            inventory_value = current_stock * unit_cost
+            
+            # Get recent sales for this high-value product
+            recent_sales = self.sales_data[
+                (self.sales_data['product_id'] == product['product_id']) &
+                (self.sales_data['date'] >= datetime.now() - timedelta(days=30))
+            ]['quantity_sold'].sum()
+            
+            if inventory_value > 5000 and recent_sales < 10:  # High value, low movement
+                recommendations.append(
+                    f"💎 {product_name} has high inventory value (₹{inventory_value:.0f}) but low sales ({recent_sales} units/month) - optimize order frequency"
+                )
+        
+        # 6. Category-specific recommendations based on perishability
+        fresh_categories = ['Vegetables', 'Dairy', 'Bakery']
+        fresh_products = self.stock_data[self.stock_data['category'].isin(fresh_categories)]
+        
+        for _, product in fresh_products.iterrows():
+            product_name = product['product_name']
+            current_stock = product['current_stock']
+            
+            # Calculate days of stock for fresh items
+            recent_sales = self.sales_data[
+                (self.sales_data['product_id'] == product['product_id']) &
+                (self.sales_data['date'] >= datetime.now() - timedelta(days=7))
+            ]['quantity_sold'].sum()
+            
+            daily_velocity = recent_sales / 7 if recent_sales > 0 else 0
+            days_of_stock = current_stock / daily_velocity if daily_velocity > 0 else float('inf')
+            
+            if days_of_stock > 7:  # More than a week of fresh products
+                recommendations.append(
+                    f"🥬 {product_name} (fresh category) has {days_of_stock:.0f} days of stock - consider reducing orders to minimize spoilage"
+                )
+        
+        return recommendations
     
     def process(self, action: str = "create_report", **kwargs) -> Any:
         """Main processing method for the reflector agent"""

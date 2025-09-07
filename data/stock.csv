@@ -1,21 +1,21 @@
-product_id,product_name,current_stock,reorder_point,max_stock,unit_cost,last_updated,category,supplier_id
-G001,Rice Basmati 1kg,40,35,210,85.0,2025-09-05 21:50:27.063605,Staples,S001
-G002,Wheat Flour 1kg,71,24,186,35.0,2025-09-05 21:50:29.511953,Staples,S001
-G003,Sugar 1kg,55,28,184,45.0,2025-09-05 21:50:28.692476,Staples,S001
-G004,Dal Toor 500g,23,15,82,120.0,2025-09-05 21:50:27.481126,Pulses,S001
-G005,Oil Sunflower 1L,21,8,95,140.0,2025-09-05 21:50:27.895957,Cooking Oil,S002
-G006,Milk Packet 500ml,50,25,205,24.0,,Dairy,S003
-G007,Bread White 400g,78,23,185,28.0,,Bakery,S004
-G008,Eggs 12 pieces,26,9,78,75.0,2025-09-05 21:50:29.106351,Protein,S003
-G009,Tea Powder 250g,21,23,179,180.0,,Beverages,S005
-G010,Salt 1kg,30,11,72,18.0,,Spices,S007
-G011,Biscuits Parle-G,44,25,156,12.0,2025-09-05 21:50:29.911715,Snacks,S005
-G012,Soap Lifebouy,45,17,115,35.0,,Personal Care,S006
-G013,Detergent 1kg,79,10,78,6.493506493506493,2025-09-05 21:08:53.000000,Household,S006
-G014,Turmeric Powder 100g,20,14,65,45.0,,Spices,S007
-G015,Onions 1kg,25,11,54,25.0,2025-09-05 21:50:28.302143,Vegetables,S008
-G016,Ghee 500ml,45,29,202,420.0,,Dairy,S003
-G017,Almonds 250g,17,9,51,680.0,,Dry Fruits,S009
-G018,Honey 500g,27,14,60,280.0,,Health,S009
-G019,Coffee Instant 100g,40,15,155,150.0,,Beverages,S005
-G020,Pickle Mixed 400g,20,12,93,95.0,,Condiments,S007
+product_id,product_name,current_stock,reorder_point,max_stock,unit_cost,last_updated,category
+G001,Rice Basmati 1kg,50,35,210,85.0,2025-09-06 16:05:05.396176,Staples
+G002,Wheat Flour 1kg,71,24,186,35.0,2025-09-06 16:05:06.452077,Staples
+G003,Sugar 1kg,55,28,184,45.0,2025-09-06 16:05:05.750331,Staples
+G004,Dal Toor 500g,23,15,82,120.0,2025-09-06 16:05:04.319929,Pulses
+G005,Oil Sunflower 1L,21,8,95,140.0,2025-09-06 16:05:04.662793,Cooking Oil
+G006,Milk Packet 500ml,50,25,205,24.0,,Dairy
+G007,Bread White 400g,78,23,185,28.0,,Bakery
+G008,Eggs 12 pieces,26,9,78,75.0,2025-09-06 16:05:06.090021,Protein
+G009,Tea Powder 250g,21,23,179,180.0,,Beverages
+G010,Salt 1kg,30,11,72,18.0,,Spices
+G011,Biscuits Parle-G,44,25,156,12.0,2025-09-06 16:05:06.822218,Snacks
+G012,Soap Lifebouy,45,17,115,35.0,,Personal Care
+G013,Detergent 1kg,79,10,78,6.493506493506493,,Household
+G014,Turmeric Powder 100g,20,14,65,45.0,,Spices
+G015,Onions 1kg,25,11,54,25.0,2025-09-06 16:05:05.007660,Vegetables
+G016,Ghee 500ml,45,29,202,420.0,,Dairy
+G017,Almonds 250g,17,9,51,680.0,,Dry Fruits
+G018,Honey 500g,27,14,60,280.0,,Health
+G019,Coffee Instant 100g,40,15,155,150.0,,Beverages
+G020,Pickle Mixed 400g,20,12,93,95.0,,Condiments

@@ -27,7 +27,6 @@ class InventoryPlan:
     reasoning: str
     confidence_score: float
     category: str = ""
-    supplier_id: str = ""
 
 class BaseAgent(ABC):
     """Abstract base class for all agents"""

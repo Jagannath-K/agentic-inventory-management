@@ -654,8 +654,7 @@ class InventoryManagementSystem:
             'product_id': 'TEST001',
             'product_name': 'Test Product',
             'current_stock': 5,
-            'threshold': 10,
-            'supplier_id': 'SUP001'
+            'threshold': 10
         }
         
         try:

@@ -254,10 +254,8 @@ if __name__ == "__main__":
     stock_df.to_csv('data/stock.csv', index=False)
     print(f"✅ Generated {len(stock_data)} product inventory records")
     
-    # Save suppliers data
-    suppliers_df = pd.DataFrame(suppliers_data)
-    suppliers_df.to_csv('data/suppliers.csv', index=False)
-    print(f"✅ Generated {len(suppliers_data)} supplier records")
+    # Supplier data no longer needed - using single supplier model
+    print(f"✅ Using single supplier model (no separate suppliers.csv needed)")
     
     # Print summary statistics
     print("\n📊 DATA SUMMARY:")
@@ -265,7 +263,7 @@ if __name__ == "__main__":
     print(f"💰 Total Revenue: ₹{sales_df['unit_price'].sum():,.2f}")
     print(f"🛒 Average Order Value: ₹{sales_df['unit_price'].mean():.2f}")
     print(f"📦 Total Products: {len(products)}")
-    print(f"🏢 Total Suppliers: {len(suppliers_data)}")
+    print(f"� Supplier Model: Single local supplier for all items")
     
     # Show monthly pattern
     sales_df['date'] = pd.to_datetime(sales_df['date'])
