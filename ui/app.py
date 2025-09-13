@@ -844,23 +844,26 @@ def create_daily_sales_entry():
                     st.metric("Today's Transactions", len(today_sales))
                 
                 with col2:
-                    st.metric("Total Revenue", f"₹{today_sales['unit_price'].sum():.2f}")
+                    total_revenue = (today_sales['quantity_sold'] * today_sales['unit_price']).sum()
+                    st.metric("Total Revenue", f"₹{total_revenue:.2f}")
                 
                 with col3:
                     st.metric("Items Sold", today_sales['quantity_sold'].sum())
                 
                 with col4:
-                    st.metric("Avg Transaction", f"₹{today_sales['unit_price'].mean():.2f}")
+                    avg_transaction = total_revenue / len(today_sales) if len(today_sales) > 0 else 0
+                    st.metric("Avg Transaction", f"₹{avg_transaction:.2f}")
                 
                 # Today's sales by product
                 st.markdown("#### Today's Sales by Product")
                 product_sales = today_sales.groupby('product_name').agg({
                     'quantity_sold': 'sum',
-                    'unit_price': 'sum'
+                    'unit_price': 'first'  # Get the unit price (should be same for all records of a product)
                 }).round(2)
                 
                 if len(product_sales) > 0:
-                    product_sales['Revenue'] = product_sales['unit_price']
+                    # Calculate correct revenue: quantity × unit_price
+                    product_sales['Revenue'] = product_sales['quantity_sold'] * product_sales['unit_price']
                     product_sales['Quantity'] = product_sales['quantity_sold']
                     st.dataframe(
                         product_sales[['Quantity', 'Revenue']].sort_values('Revenue', ascending=False),
@@ -872,9 +875,9 @@ def create_daily_sales_entry():
                     fig = px.bar(
                         product_sales.reset_index(),
                         x='product_name',
-                        y='unit_price',
+                        y='Revenue',
                         title="Today's Revenue by Product",
-                        labels={'unit_price': 'Revenue (₹)', 'product_name': 'Product'}
+                        labels={'Revenue': 'Revenue (₹)', 'product_name': 'Product'}
                     )
                     fig.update_layout(xaxis_tickangle=-45)
                     st.plotly_chart(fig, use_container_width=True)
