@@ -366,7 +366,7 @@ def create_ai_planning_dashboard():
                 'Urgency': urgency_display,
                 'Reorder Date': plan.reorder_date.strftime('%Y-%m-%d'),
                 'Confidence': f"{plan.confidence_score:.1%}",
-                'Reasoning': plan.reasoning[:80] + "..." if len(plan.reasoning) > 80 else plan.reasoning
+                'Reasoning': plan.reasoning  # Show full reasoning text
             })
         
         if plan_data:
@@ -384,7 +384,7 @@ def create_ai_planning_dashboard():
                 else:
                     return ['background-color: #e8f5e8; color: #1b5e20'] * len(row)
             
-            # Apply styling with better contrast
+            # Apply styling with better contrast and text wrapping
             styled_df = df.style.apply(highlight_urgency, axis=1)
             styled_df = styled_df.set_table_styles([
                 {'selector': 'th', 'props': [('background-color', '#1f77b4'), 
@@ -393,12 +393,28 @@ def create_ai_planning_dashboard():
                                              ('text-align', 'center')]},
                 {'selector': 'td', 'props': [('text-align', 'left'),
                                              ('padding', '8px'),
-                                             ('border', '1px solid #ddd')]},
+                                             ('border', '1px solid #ddd'),
+                                             ('white-space', 'pre-wrap'),
+                                             ('word-wrap', 'break-word'),
+                                             ('max-width', '300px')]},
                 {'selector': 'table', 'props': [('border-collapse', 'collapse'),
-                                               ('width', '100%')]}
+                                               ('width', '100%')]},
+                {'selector': 'td:nth-child(8)', 'props': [('max-width', '400px'),
+                                                          ('min-width', '200px')]}  # Reasoning column
             ])
             
-            st.dataframe(styled_df, use_container_width=True)
+            st.dataframe(styled_df, use_container_width=True, height=400)
+            
+            # Add expandable detailed view for reasoning
+            with st.expander("📋 View Detailed Reasoning for All Items"):
+                for i, plan in enumerate(filtered_plans, 1):
+                    urgency_emoji = {
+                        'CRITICAL': '🔴', 'HIGH': '🟡', 'MEDIUM': '🟠', 'LOW': '🟢'
+                    }.get(plan.urgency_level, '⚪')
+                    
+                    st.markdown(f"**{i}. {plan.product_name}** (Stock: {plan.current_stock}, Urgency: {urgency_emoji} {plan.urgency_level})")
+                    st.markdown(f"*{plan.reasoning}*")
+                    st.markdown("---")
             
             # Export option
             csv = df.to_csv(index=False)

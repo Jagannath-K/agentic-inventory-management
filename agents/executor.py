@@ -576,10 +576,14 @@ class ExecutorAgent(BaseAgent):
                     'cost': order_result.actual_cost or order_request.estimated_cost
                 })
         
-        # Process medium priority plans (limit to avoid overwhelming suppliers)
-        medium_to_execute = medium_plans[:5]  # Limit to 5 medium priority orders
+        # Process medium priority plans (increased limit since we use consolidated emails)
+        medium_to_execute = medium_plans[:10]  # Increased limit to 10 medium priority orders
+        skipped_medium = medium_plans[10:] if len(medium_plans) > 10 else []
         
-        self.logger.info(f"Processing {len(medium_to_execute)} medium priority inventory plans")
+        self.logger.info(f"Processing {len(medium_to_execute)} out of {len(medium_plans)} medium priority inventory plans")
+        if skipped_medium:
+            skipped_names = [plan.product_name for plan in skipped_medium]
+            self.logger.info(f"Skipped medium priority items: {', '.join(skipped_names)}")
         
         for plan in medium_to_execute:
             if plan.reorder_quantity > 0:
