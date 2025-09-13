@@ -1,21 +1,21 @@
 product_id,product_name,current_stock,reorder_point,max_stock,unit_cost,last_updated,category
-G001,Rice Basmati 1kg,49,35,210,85.0,2025-09-13 19:13:34.140781,Staples
+G001,Rice Basmati 1kg,49,35,210,85.0,2025-09-13 21:37:59.548268,Staples
 G002,Wheat Flour 1kg,71,24,186,35.0,,Staples
 G003,Sugar 1kg,55,28,184,45.0,,Staples
 G004,Dal Toor 500g,23,15,82,120.0,,Pulses
-G005,Oil Sunflower 1L,16,8,95,140.0,2025-09-13 19:13:32.371876,Cooking Oil
-G006,Milk Packet 500ml,46,25,205,24.0,2025-09-13 19:13:32.971099,Dairy
+G005,Oil Sunflower 1L,16,8,95,140.0,2025-09-13 21:37:56.599197,Cooking Oil
+G006,Milk Packet 500ml,46,25,205,24.0,2025-09-13 21:37:57.617824,Dairy
 G007,Bread White 400g,78,23,185,28.0,,Bakery
 G008,Eggs 12 pieces,26,9,78,75.0,,Protein
-G009,Tea Powder 250g,24,23,179,180.0,2025-09-13 19:13:33.550001,Beverages
+G009,Tea Powder 250g,24,23,179,180.0,2025-09-13 21:37:58.588994,Beverages
 G010,Salt 1kg,30,11,72,18.0,,Spices
 G011,Biscuits Parle-G,44,25,156,12.0,,Snacks
 G012,Soap Lifebouy,45,17,115,35.0,,Personal Care
 G013,Detergent 1kg,79,10,78,65.0,,Household
 G014,Turmeric Powder 100g,19,14,65,45.0,2025-09-13 18:48:27.000000,Spices
-G015,Onions 1kg,25,11,54,25.0,2025-09-13 19:13:33.847971,Vegetables
-G016,Ghee 500ml,45,29,202,420.0,2025-09-13 19:13:32.681299,Dairy
-G017,Almonds 250g,17,9,51,680.0,2025-09-13 19:13:33.260937,Dry Fruits
+G015,Onions 1kg,25,11,54,25.0,2025-09-13 21:37:59.052713,Vegetables
+G016,Ghee 500ml,45,29,202,420.0,2025-09-13 21:37:57.117892,Dairy
+G017,Almonds 250g,17,9,51,680.0,2025-09-13 21:37:58.116807,Dry Fruits
 G018,Honey 500g,27,14,60,280.0,,Health
 G019,Coffee Instant 100g,40,15,155,150.0,,Beverages
 G020,Pickle Mixed 400g,20,12,93,95.0,,Condiments

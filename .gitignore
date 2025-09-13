@@ -87,3 +87,9 @@ logs/
 # Backup files
 *_backup.*
 *.bak
+
+# Corrupted/temporary JSON files
+*_corrupted_*.json
+order_log.json
+cycle_results.json
+daily_transactions.json

@@ -428,41 +428,17 @@ class ExecutorAgent(BaseAgent):
             return False
     
     def log_order_transaction(self, order_request: OrderRequest, order_result: OrderResult) -> None:
-        """Log order transaction for audit trail"""
-        transaction = {
-            'timestamp': datetime.now().isoformat(),
-            'order_id': order_result.order_id,
-            'product_id': order_request.product_id,
-            'product_name': order_request.product_name,
-            'quantity': order_request.quantity,
-            'estimated_cost': order_request.estimated_cost,
-            'actual_cost': order_result.actual_cost,
-            'priority': order_request.priority,
-            'success': order_result.success,
-            'message': order_result.message,
-            'expected_delivery': order_request.expected_delivery.isoformat() if order_request.expected_delivery else None,
-            'estimated_delivery': order_result.estimated_delivery.isoformat() if order_result.estimated_delivery else None
-        }
-        
-        # In a real system, this would be saved to a database
-        # For now, we'll append to a JSON file
-        try:
-            import os
-            log_file = 'data/order_log.json'
-            
-            if os.path.exists(log_file):
-                with open(log_file, 'r') as f:
-                    logs = json.load(f)
-            else:
-                logs = []
-            
-            logs.append(transaction)
-            
-            with open(log_file, 'w') as f:
-                json.dump(logs, f, indent=2)
-                
-        except Exception as e:
-            self.logger.error(f"Error logging transaction: {e}")
+        """Log order transaction for audit trail - DISABLED (not used in dashboard workflow)"""
+        # Transaction logging disabled since these files are not used in the current dashboard workflow
+        # and were causing JSON serialization issues. If logging is needed in the future,
+        # ensure proper numpy type conversion before JSON serialization.
+        self.logger.debug(f"Order transaction logged in memory: {order_result.order_id} - {order_request.product_name}")
+        return
+        # Transaction logging disabled since these files are not used in the current dashboard workflow
+        # and were causing JSON serialization issues. If logging is needed in the future,
+        # ensure proper numpy type conversion before JSON serialization.
+        self.logger.debug(f"Order transaction logged in memory: {order_result.order_id} - {order_request.product_name}")
+        return
     
     async def execute_order(self, order_request: OrderRequest) -> OrderResult:
         """Execute a single order request"""

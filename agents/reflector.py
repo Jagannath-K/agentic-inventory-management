@@ -54,34 +54,10 @@ class ReflectorAgent(BaseAgent):
             self.sales_data['date'] = pd.to_datetime(self.sales_data['date'])
             self.stock_data['last_updated'] = pd.to_datetime(self.stock_data['last_updated'])
             
-            # Load order log with error handling
+            # Order log loading disabled - not used in dashboard workflow
+            # This prevents creation of corrupted JSON files and unnecessary file operations
             self.order_log = []
-            if os.path.exists('data/order_log.json'):
-                try:
-                    with open('data/order_log.json', 'r') as f:
-                        content = f.read().strip()
-                        if content:  # Check if file is not empty
-                            self.order_log = json.loads(content)
-                        else:
-                            self.logger.warning("order_log.json is empty, initializing with empty list")
-                            self.order_log = []
-                except json.JSONDecodeError as json_error:
-                    self.logger.warning(f"Error parsing order_log.json: {json_error}. Initializing with empty list")
-                    self.order_log = []
-                    # Create a backup of the corrupted file
-                    import shutil
-                    shutil.copy('data/order_log.json', f'data/order_log_corrupted_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json')
-                    # Initialize with empty JSON file
-                    with open('data/order_log.json', 'w') as f:
-                        json.dump([], f, indent=2)
-                except Exception as file_error:
-                    self.logger.warning(f"Error reading order_log.json: {file_error}. Initializing with empty list")
-                    self.order_log = []
-            else:
-                self.logger.info("order_log.json not found, initializing with empty list")
-                # Create the file if it doesn't exist
-                with open('data/order_log.json', 'w') as f:
-                    json.dump([], f, indent=2)
+            self.logger.info("Order log loading disabled - using empty list for compatibility")
             
             self.logger.info("Reflector data loaded successfully")
         except Exception as e:
