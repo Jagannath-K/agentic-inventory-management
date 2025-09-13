@@ -34,7 +34,6 @@ pip install -r requirements.txt
 echo "Creating directories..."
 mkdir -p data
 mkdir -p models
-mkdir -p logs
 
 # Set environment variables
 export PYTHONPATH="${PYTHONPATH}:$(pwd)"

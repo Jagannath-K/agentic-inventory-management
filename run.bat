@@ -35,7 +35,6 @@ REM Create necessary directories
 echo Creating directories...
 if not exist "data" mkdir data
 if not exist "models" mkdir models
-if not exist "logs" mkdir logs
 
 :menu
 echo.

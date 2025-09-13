@@ -58,7 +58,6 @@ Thumbs.db
 
 # Logs
 *.log
-logs/
 
 # Model files (optional - uncomment if you want to exclude large model files)
 # *.pkl

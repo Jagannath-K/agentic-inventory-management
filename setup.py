@@ -37,7 +37,6 @@ def create_directories():
     directories = [
         "data",
         "models", 
-        "logs",
         "agents",
         "ui"
     ]
