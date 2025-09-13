@@ -624,8 +624,12 @@ def create_demand_forecasting_dashboard():
     col1, col2 = st.columns([3, 1])
     
     with col1:
-        selected_product = st.selectbox("Select Product for Forecasting", 
-                                      stock_data['product_id'].tolist())
+        # Create a mapping of product names to IDs
+        product_options = stock_data['product_name'].tolist()
+        selected_product_name = st.selectbox("Select Product for Forecasting", 
+                                           product_options)
+        # Get the product_id for the selected product name
+        selected_product = stock_data[stock_data['product_name'] == selected_product_name]['product_id'].iloc[0]
     
     with col2:
         forecast_days = st.number_input("Forecast Days", min_value=1, max_value=90, value=30)
@@ -664,8 +668,11 @@ def create_demand_forecasting_dashboard():
         results = st.session_state.forecast_results
         
         if results['product_id'] == selected_product:
+            # Get product name for display
+            product_display_name = stock_data[stock_data['product_id'] == selected_product]['product_name'].iloc[0]
+            
             # Forecast chart
-            st.subheader(f"Demand Forecast for {selected_product}")
+            st.subheader(f"Demand Forecast for {product_display_name}")
             
             # Get historical data for context
             product_sales = sales_data[sales_data['product_id'] == selected_product]
@@ -692,7 +699,7 @@ def create_demand_forecasting_dashboard():
                               line=dict(color='red', dash='dash'))
                 )
                 
-                fig.update_layout(title=f"Sales History and Forecast for {selected_product}",
+                fig.update_layout(title=f"Sales History and Forecast for {product_display_name}",
                                 xaxis_title="Date", yaxis_title="Quantity")
                 
                 st.plotly_chart(fig, use_container_width=True)

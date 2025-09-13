@@ -167,6 +167,90 @@ class DemandPredictor:
         
         return features_df
     
+    def create_prediction_features(self, product_id: str, target_date: datetime) -> pd.DataFrame:
+        """Create features specifically for prediction on a target date"""
+        if self.sales_data is None:
+            self.load_data()
+        
+        # Filter sales data for the product
+        product_sales = self.sales_data[self.sales_data['product_id'] == product_id].copy()
+        
+        if product_sales.empty:
+            # Return default features for new products with target date characteristics
+            return pd.DataFrame({
+                'day_of_week': [target_date.weekday()],
+                'month': [target_date.month],
+                'day_of_month': [target_date.day],
+                'quarter': [(target_date.month - 1) // 3 + 1],  # Calculate quarter manually
+                'is_weekend': [1 if target_date.weekday() >= 5 else 0],
+                'days_since_launch': [1],
+                'avg_demand_7d': [1],
+                'avg_demand_14d': [1],
+                'avg_demand_30d': [1],
+                'trend_7d': [0],
+                'volatility_7d': [0.5],
+                'price_trend': [0],
+                'seasonal_factor': [1.0]
+            })
+        
+        # Create daily aggregated data
+        daily_sales = product_sales.groupby('date').agg({
+            'quantity_sold': 'sum',
+            'unit_price': 'mean'
+        }).reset_index()
+        daily_sales = daily_sales.sort_values('date')
+        
+        # Create features for the target date using historical data
+        features = {
+            'day_of_week': target_date.weekday(),
+            'month': target_date.month,
+            'day_of_month': target_date.day,
+            'quarter': (target_date.month - 1) // 3 + 1,  # Calculate quarter manually
+            'is_weekend': 1 if target_date.weekday() >= 5 else 0,
+            'days_since_launch': (target_date - daily_sales['date'].min()).days + 1
+        }
+        
+        # Use all historical sales for features (since we're predicting future)
+        all_sales = daily_sales['quantity_sold']
+        
+        if len(all_sales) >= 7:
+            features['avg_demand_7d'] = all_sales.tail(7).mean()
+            if len(all_sales) >= 14:
+                features['trend_7d'] = all_sales.tail(7).mean() - all_sales.tail(14).head(7).mean()
+            else:
+                features['trend_7d'] = 0
+            features['volatility_7d'] = all_sales.tail(7).std()
+        else:
+            features['avg_demand_7d'] = all_sales.mean() if len(all_sales) > 0 else 1
+            features['trend_7d'] = 0
+            features['volatility_7d'] = all_sales.std() if len(all_sales) > 1 else 0.5
+        
+        if len(all_sales) >= 14:
+            features['avg_demand_14d'] = all_sales.tail(14).mean()
+        else:
+            features['avg_demand_14d'] = features['avg_demand_7d']
+        
+        if len(all_sales) >= 30:
+            features['avg_demand_30d'] = all_sales.tail(30).mean()
+        else:
+            features['avg_demand_30d'] = features['avg_demand_14d']
+        
+        # Price trend features
+        all_prices = daily_sales['unit_price']
+        if len(all_prices) >= 2:
+            features['price_trend'] = all_prices.iloc[-1] - all_prices.iloc[-2]
+        else:
+            features['price_trend'] = 0
+        
+        # Seasonal factors (simplified - based on month for Indian market)
+        seasonal_multipliers = {
+            1: 0.9, 2: 0.8, 3: 0.9, 4: 1.0, 5: 1.1, 6: 1.2,
+            7: 1.3, 8: 1.2, 9: 1.0, 10: 1.1, 11: 1.3, 12: 1.4
+        }
+        features['seasonal_factor'] = seasonal_multipliers.get(target_date.month, 1.0)
+        
+        return pd.DataFrame([features])
+
     def prepare_training_data(self, product_id: str) -> Tuple[np.ndarray, np.ndarray, List[str]]:
         """Prepare training data for a specific product"""
         features_df = self.create_features(product_id)
@@ -292,10 +376,10 @@ class DemandPredictor:
                 'reasoning': reasoning
             }
         
-        # Create features for the target date
-        features_df = self.create_features(product_id, target_date)
+        # Create features for the target date using the new prediction method
+        features_df = self.create_prediction_features(product_id, target_date)
         feature_columns = [col for col in features_df.columns if col not in ['target', 'date']]
-        X_pred = features_df[feature_columns].iloc[-1:].values
+        X_pred = features_df[feature_columns].values
         
         # Get predictions from all trained models
         model_predictions = {}
