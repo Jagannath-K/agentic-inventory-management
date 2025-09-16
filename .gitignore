@@ -10,6 +10,12 @@ test_ultra_precision.py
 time_series_precision.py
 ultra_precision_solution.py
 
+# Additional Development/Test Files
+align_prices.py
+create_realistic_data.py
+debug_flat_line.py
+test_*.py
+
 # Python
 __pycache__/
 *.py[cod]
