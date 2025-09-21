@@ -165,6 +165,183 @@ def load_data():
         st.error(f"Error loading data: {e}")
         return None, None, None
 
+def render_delivery_tracking_ui():
+    """Render the delivery tracking and confirmation interface"""
+    st.markdown('<h2 style="color: #1f77b4; font-weight: 600;">📦 Delivery Management</h2>', unsafe_allow_html=True)
+    
+    # Ensure executor is available
+    if 'executor' not in st.session_state or st.session_state.executor is None:
+        if not initialize_agents():
+            st.error("Failed to initialize agents")
+            return
+    
+    executor = st.session_state.executor
+    
+    # Create tabs for different views
+    tab1, tab2, tab3 = st.tabs(["🚚 Pending Deliveries", "✅ Confirm Delivery", "📋 Order History"])
+    
+    with tab1:
+        st.markdown('<h3 style="color: #1f77b4; font-weight: 500;">Pending Deliveries</h3>', unsafe_allow_html=True)
+        
+        # Get pending orders
+        try:
+            pending_orders = executor.process("get_pending_orders")
+            
+            if pending_orders:
+                # Convert to DataFrame for better display
+                df_pending = pd.DataFrame(pending_orders)
+                
+                # Format the display
+                display_df = df_pending[['order_id', 'product_name', 'quantity_ordered', 
+                                       'cost', 'priority', 'expected_delivery']].copy()
+                display_df.columns = ['Order ID', 'Product', 'Quantity', 'Cost (₹)', 'Priority', 'Expected Delivery']
+                
+                # Format cost with Indian rupee symbol
+                display_df['Cost (₹)'] = display_df['Cost (₹)'].apply(lambda x: f"₹{x:,.2f}")
+                
+                # Convert expected delivery to readable format
+                display_df['Expected Delivery'] = pd.to_datetime(display_df['Expected Delivery']).dt.strftime('%Y-%m-%d')
+                
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+                
+                # Summary metrics
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Pending Orders", len(pending_orders))
+                with col2:
+                    total_value = sum([order['cost'] for order in pending_orders])
+                    st.metric("Total Value", f"₹{total_value:,.2f}")
+                with col3:
+                    high_priority = len([o for o in pending_orders if o['priority'] in ['CRITICAL', 'HIGH']])
+                    st.metric("High Priority", high_priority)
+                    
+            else:
+                st.success("✅ No pending deliveries. All orders have been received!")
+                
+        except Exception as e:
+            st.error(f"Error loading pending orders: {e}")
+    
+    with tab2:
+        st.markdown('<h3 style="color: #1f77b4; font-weight: 500;">Confirm Delivery</h3>', unsafe_allow_html=True)
+        
+        try:
+            # Get pending orders for selection
+            pending_orders = executor.process("get_pending_orders")
+            
+            if pending_orders:
+                # Select order to confirm
+                order_options = {f"{order['order_id']} - {order['product_name']} ({order['quantity_ordered']} units)": 
+                               order['order_id'] for order in pending_orders}
+                
+                selected_order_display = st.selectbox(
+                    "Select order to confirm delivery:",
+                    options=list(order_options.keys()),
+                    key="delivery_order_select"
+                )
+                
+                if selected_order_display:
+                    selected_order_id = order_options[selected_order_display]
+                    
+                    # Find the order details
+                    selected_order = next(order for order in pending_orders if order['order_id'] == selected_order_id)
+                    
+                    # Order details display
+                    st.markdown("**Order Details:**")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.write(f"• **Product:** {selected_order['product_name']}")
+                        st.write(f"• **Ordered Quantity:** {selected_order['quantity_ordered']} units")
+                        st.write(f"• **Order Date:** {selected_order['order_date'][:10]}")
+                    with col2:
+                        st.write(f"• **Expected Delivery:** {selected_order['expected_delivery'][:10]}")
+                        st.write(f"• **Priority:** {selected_order['priority']}")
+                        st.write(f"• **Cost:** ₹{selected_order['cost']:,.2f}")
+                    
+                    st.markdown("---")
+                    
+                    # Delivery confirmation form
+                    st.markdown("**Confirm Delivery:**")
+                    
+                    # Received quantity input
+                    max_quantity = selected_order['quantity_ordered']
+                    received_quantity = st.number_input(
+                        f"Received Quantity (max: {max_quantity})",
+                        min_value=1,
+                        max_value=max_quantity,
+                        value=max_quantity,
+                        help="Enter the actual quantity received from supplier",
+                        key="delivery_quantity"
+                    )
+                    
+                    # Confirm button
+                    if st.button("✅ Confirm Delivery", type="primary", key="confirm_delivery_btn"):
+                        # Process delivery confirmation
+                        with st.spinner("Confirming delivery..."):
+                            try:
+                                result = executor.process("confirm_delivery", 
+                                                        order_id=selected_order_id, 
+                                                        received_quantity=received_quantity)
+                                
+                                if result['success']:
+                                    st.success(f"✅ Delivery confirmed successfully!")
+                                    st.success(f"📦 {result['product_name']}: Stock updated from {result['old_stock']} to {result['new_stock']} units")
+                                    
+                                    # Show partial delivery warning
+                                    if received_quantity < max_quantity:
+                                        missing = max_quantity - received_quantity
+                                        st.warning(f"⚠️ Partial delivery: {missing} units still missing. Consider placing a new order.")
+                                    
+                                    # Clear the form
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ Failed to confirm delivery: {result['message']}")
+                            except Exception as e:
+                                st.error(f"Error confirming delivery: {e}")
+            else:
+                st.info("No pending orders to confirm.")
+                
+        except Exception as e:
+            st.error(f"Error in delivery confirmation: {e}")
+    
+    with tab3:
+        st.markdown('<h3 style="color: #1f77b4; font-weight: 500;">Order History</h3>', unsafe_allow_html=True)
+        
+        try:
+            # Show completed orders
+            completed_orders = executor.completed_orders
+            
+            if completed_orders:
+                df_completed = pd.DataFrame(completed_orders)
+                
+                # Format for display
+                display_completed = df_completed[['order_id', 'product_name', 'quantity_ordered', 
+                                               'received_quantity', 'cost', 'delivery_date']].copy()
+                display_completed.columns = ['Order ID', 'Product', 'Ordered', 'Received', 'Cost (₹)', 'Delivered']
+                
+                # Format cost
+                display_completed['Cost (₹)'] = display_completed['Cost (₹)'].apply(lambda x: f"₹{x:,.2f}")
+                
+                # Format delivery date
+                display_completed['Delivered'] = pd.to_datetime(display_completed['Delivered']).dt.strftime('%Y-%m-%d %H:%M')
+                
+                st.dataframe(display_completed, use_container_width=True, hide_index=True)
+                
+                # Summary
+                total_completed = len(completed_orders)
+                total_value_completed = sum([order['cost'] for order in completed_orders])
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Completed Orders", total_completed)
+                with col2:
+                    st.metric("Total Value Received", f"₹{total_value_completed:,.2f}")
+            else:
+                st.info("No completed orders yet.")
+                
+        except Exception as e:
+            st.error(f"Error loading order history: {e}")
+
 def initialize_agents():
     """Initialize all agents"""
     if not st.session_state.agents_initialized:
@@ -484,6 +661,10 @@ def create_ai_planning_dashboard():
                 st.dataframe(df, use_container_width=True, hide_index=True)
             else:
                 st.info("No order details available.")
+        
+        # Add Delivery Tracking UI below Order Execution
+        st.markdown("---")
+        render_delivery_tracking_ui()
     
     else:
         st.info("Click 'Generate New Plan' to create an AI-powered inventory plan.")

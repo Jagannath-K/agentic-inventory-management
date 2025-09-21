@@ -47,6 +47,12 @@ class ExecutorAgent(BaseAgent):
     AI Agent responsible for executing inventory decisions and managing orders
     """
     
+    # Email configuration constants
+    EMAIL_SMTP_SERVER = "smtp.gmail.com"
+    EMAIL_SMTP_PORT = 587
+    EMAIL_USER = "kjagannath321@gmail.com"
+    EMAIL_PASSWORD = "hkpu bisz volr vjgr"
+    
     def __init__(self):
         super().__init__("ExecutorAgent")
         self.stock_data = None
@@ -76,7 +82,7 @@ class ExecutorAgent(BaseAgent):
             self.load_data()
         
         # Get product and supplier information
-        product_info = self.stock_data[self.stock_data['product_id'] == plan.product_id].iloc[0]
+        product_info, _ = self._find_product_by_id(plan.product_id)
         
         # Calculate order quantity based on predicted demand (30-day forecast)
         try:
@@ -155,7 +161,7 @@ class ExecutorAgent(BaseAgent):
         return validation_result
     
     async def simulate_order_placement(self, order_request: OrderRequest) -> OrderResult:
-        """Place order and send email to supplier"""
+        """Place order (always uses batch email mode)"""
         # Generate order ID
         order_id = f"ORD-{self.order_counter:06d}"
         self.order_counter += 1
@@ -164,57 +170,17 @@ class ExecutorAgent(BaseAgent):
             # Use fixed pricing - no random variations for consistency
             actual_cost = order_request.estimated_cost
             
-            # Send order email to supplier
-            success = self.send_order_email(order_request, order_id, actual_cost)
-            
-            if success:
-                result = OrderResult(
-                    order_id=order_id,
-                    success=True,
-                    message=f"Order email sent successfully to supplier",
-                    estimated_delivery=order_request.expected_delivery,
-                    actual_cost=actual_cost
-                )
-                
-                self.logger.info(f"Order {order_id} sent successfully for {order_request.product_name}")
-            else:
-                result = OrderResult(
-                    order_id=order_id,
-                    success=False,
-                    message="Failed to send order email to supplier"
-                )
-                
-                self.logger.error(f"Order {order_id} failed for {order_request.product_name}")
-                
-        except Exception as e:
-            result = OrderResult(
-                order_id=order_id,
-                success=False,
-                message=f"Order processing error: {str(e)}"
-            )
-            self.logger.error(f"Order {order_id} error: {e}")
-        
-        return result
-    
-    async def simulate_order_placement_without_email(self, order_request: OrderRequest) -> OrderResult:
-        """Place order without sending individual email (for batch processing)"""
-        # Generate order ID
-        order_id = f"ORD-{self.order_counter:06d}"
-        self.order_counter += 1
-        
-        try:
-            # Use fixed pricing - no random variations for consistency
-            actual_cost = order_request.estimated_cost
+            # Always use batch email mode
+            message = "Order processed successfully (pending batch email)"
+            self.logger.info(f"Order {order_id} processed for batch email for {order_request.product_name}")
             
             result = OrderResult(
                 order_id=order_id,
                 success=True,
-                message=f"Order processed successfully (pending batch email)",
+                message=message,
                 estimated_delivery=order_request.expected_delivery,
                 actual_cost=actual_cost
             )
-            
-            self.logger.info(f"Order {order_id} processed for batch email for {order_request.product_name}")
                 
         except Exception as e:
             result = OrderResult(
@@ -226,12 +192,19 @@ class ExecutorAgent(BaseAgent):
         
         return result
     
-    def send_order_email(self, order_request: OrderRequest, order_id: str, actual_cost: float = None) -> bool:
-        """Send order email to supplier - individual order (deprecated, use send_consolidated_order_email)"""
-        # This method is kept for compatibility but consolidated email is preferred
-        if actual_cost is None:
-            actual_cost = order_request.estimated_cost
-        return self.send_consolidated_order_email([order_request], [order_id], [actual_cost])
+    def _get_actual_cost(self, order_result: OrderResult, order_request: OrderRequest) -> float:
+        """Helper method to get actual cost, falling back to estimated cost if needed"""
+        return order_result.actual_cost or order_request.estimated_cost
+    
+    def _find_product_by_id(self, product_id: str) -> tuple[pd.Series, int]:
+        """Helper method to find product info and index by product_id"""
+        if self.stock_data is None:
+            self.load_data()
+        
+        product_mask = self.stock_data['product_id'] == product_id
+        product_idx = self.stock_data[product_mask].index[0]
+        product_info = self.stock_data.iloc[product_idx]
+        return product_info, product_idx
     
     def send_consolidated_order_email(self, order_requests: List[OrderRequest], order_ids: List[str], actual_costs: List[float] = None) -> bool:
         """Send consolidated order email with all orders in a single table"""
@@ -242,11 +215,14 @@ class ExecutorAgent(BaseAgent):
             # Use actual costs if provided, otherwise use estimated costs
             if actual_costs is None:
                 actual_costs = [req.estimated_cost for req in order_requests]
-                
+            
+            # Store current datetime for consistency across email
+            current_time = datetime.now()
+            
             # Create email subject
             order_count = len(order_requests)
             total_value = sum(actual_costs)
-            subject = f"📦 Purchase Order - {order_count} Items (₹{total_value:,.2f}) - {datetime.now().strftime('%Y-%m-%d')}"
+            subject = f"📦 Purchase Order - {order_count} Items (₹{total_value:,.2f}) - {current_time.strftime('%Y-%m-%d')}"
             
             # Create consolidated order table
             order_rows = ""
@@ -303,7 +279,7 @@ class ExecutorAgent(BaseAgent):
                             <ul style="margin: 10px 0; padding-left: 20px;">
                                 <li><strong>Total Items:</strong> {order_count} products</li>
                                 <li><strong>Total Order Value:</strong> ₹{total_value:,.2f}</li>
-                                <li><strong>Order Date:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</li>
+                                <li><strong>Order Date:</strong> {current_time.strftime('%Y-%m-%d %H:%M:%S')}</li>
                                 <li><strong>Request Type:</strong> AI-Optimized Inventory Replenishment</li>
                             </ul>
                         </div>
@@ -357,7 +333,7 @@ class ExecutorAgent(BaseAgent):
                     </div>
                     
                     <div class="footer">
-                        <p>🤖 This order was automatically generated by AI analysis • Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} • Please contact us for any questions</p>
+                        <p>🤖 This order was automatically generated by AI analysis • Generated on {current_time.strftime('%Y-%m-%d %H:%M:%S')} • Please contact us for any questions</p>
                     </div>
                 </div>
             </body>
@@ -371,10 +347,10 @@ class ExecutorAgent(BaseAgent):
             import os
             
             # Email configuration
-            smtp_server = "smtp.gmail.com"
-            smtp_port = 587
-            email_user = "kjagannath321@gmail.com"
-            email_password = "hkpu bisz volr vjgr"
+            smtp_server = self.EMAIL_SMTP_SERVER
+            smtp_port = self.EMAIL_SMTP_PORT
+            email_user = self.EMAIL_USER
+            email_password = self.EMAIL_PASSWORD
             
             # Create message
             msg = MIMEMultipart('alternative')
@@ -399,27 +375,40 @@ class ExecutorAgent(BaseAgent):
         except Exception as e:
             self.logger.error(f"Failed to send consolidated order email: {e}")
             return False
-        
-        return result
     
     def update_inventory_records(self, order_request: OrderRequest, order_result: OrderResult) -> bool:
-        """Update inventory records after successful order placement"""
+        """Record order placement (NOT stock receipt) - track pending orders"""
         try:
             if not order_result.success:
                 return False
             
             # Find the product in stock data
-            product_idx = self.stock_data[self.stock_data['product_id'] == order_request.product_id].index[0]
+            _, product_idx = self._find_product_by_id(order_request.product_id)
             
-            # Update expected stock (incoming inventory)
-            # Note: In a real system, this would be tracked separately as "on order" inventory
-            self.logger.info(f"Recorded incoming inventory: {order_request.quantity} units of {order_request.product_name}")
+            pending_order = {
+                'order_id': order_result.order_id,
+                'product_id': order_request.product_id,
+                'product_name': order_request.product_name,
+                'quantity_ordered': order_request.quantity,
+                'cost': order_result.actual_cost or order_request.estimated_cost,
+                'order_date': order_request.requested_date.isoformat(),
+                'expected_delivery': order_request.expected_delivery.isoformat(),
+                'status': 'PENDING_DELIVERY',
+                'priority': order_request.priority
+            }
             
-            # Update last_updated timestamp
+            # Add to pending orders list (in memory for now)
+            self.pending_orders.append(pending_order)
+            
+            # Update last_updated timestamp for tracking
             self.stock_data.at[product_idx, 'last_updated'] = datetime.now()
             
-            # Save updated stock data
+            # Save updated stock data (without changing current_stock yet)
             self.stock_data.to_csv('data/stock.csv', index=False)
+            
+            cost_display = self._get_actual_cost(order_result, order_request)
+            self.logger.info(f"Recorded PENDING order: {order_request.quantity} units of {order_request.product_name} (Order ID: {order_result.order_id})")
+            self.logger.info(f"⚠️  Stock will be updated only when delivery is confirmed")
             
             return True
             
@@ -427,22 +416,111 @@ class ExecutorAgent(BaseAgent):
             self.logger.error(f"Error updating inventory records: {e}")
             return False
     
-    def log_order_transaction(self, order_request: OrderRequest, order_result: OrderResult) -> None:
-        """Log order transaction for audit trail - DISABLED (not used in dashboard workflow)"""
-        # Transaction logging disabled since these files are not used in the current dashboard workflow
-        # and were causing JSON serialization issues. If logging is needed in the future,
-        # ensure proper numpy type conversion before JSON serialization.
-        self.logger.debug(f"Order transaction logged in memory: {order_result.order_id} - {order_request.product_name}")
-        return
-        # Transaction logging disabled since these files are not used in the current dashboard workflow
-        # and were causing JSON serialization issues. If logging is needed in the future,
-        # ensure proper numpy type conversion before JSON serialization.
-        self.logger.debug(f"Order transaction logged in memory: {order_result.order_id} - {order_request.product_name}")
-        return
+    def confirm_delivery(self, order_id: str, received_quantity: Optional[int] = None) -> Dict[str, Any]:
+        """Confirm delivery and update actual stock levels"""
+        try:
+            # Find the pending order
+            pending_order = None
+            order_index = None
+            
+            for i, order in enumerate(self.pending_orders):
+                if order['order_id'] == order_id:
+                    pending_order = order
+                    order_index = i
+                    break
+            
+            if not pending_order:
+                return {
+                    'success': False,
+                    'message': f"Order {order_id} not found in pending orders"
+                }
+            
+            if pending_order['status'] != 'PENDING_DELIVERY':
+                return {
+                    'success': False,
+                    'message': f"Order {order_id} is not pending delivery (status: {pending_order['status']})"
+                }
+            
+            # Use received quantity or default to ordered quantity
+            if received_quantity is None:
+                received_quantity = pending_order['quantity_ordered']
+            
+            # Load current stock data
+            if self.stock_data is None:
+                self.load_data()
+            
+            # Find and update the product stock
+            _, product_idx = self._find_product_by_id(pending_order['product_id'])
+            current_stock = self.stock_data.at[product_idx, 'current_stock']
+            new_stock = current_stock + received_quantity
+            
+            # Update stock levels
+            self.stock_data.at[product_idx, 'current_stock'] = new_stock
+            self.stock_data.at[product_idx, 'last_updated'] = datetime.now()
+            
+            # Save updated stock data
+            self.stock_data.to_csv('data/stock.csv', index=False)
+            
+            # Update order status
+            self.pending_orders[order_index]['status'] = 'DELIVERED'
+            self.pending_orders[order_index]['delivery_date'] = datetime.now().isoformat()
+            self.pending_orders[order_index]['received_quantity'] = received_quantity
+            
+            # Move to completed orders
+            completed_order = self.pending_orders.pop(order_index)
+            self.completed_orders.append(completed_order)
+            
+            self.logger.info(f"✅ DELIVERY CONFIRMED: {received_quantity} units of {pending_order['product_name']}")
+            self.logger.info(f"📦 Stock updated: {current_stock} → {new_stock} units")
+            
+            return {
+                'success': True,
+                'message': f"Delivery confirmed for {pending_order['product_name']}",
+                'product_name': pending_order['product_name'],
+                'received_quantity': received_quantity,
+                'old_stock': current_stock,
+                'new_stock': new_stock,
+                'order_id': order_id
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error confirming delivery for order {order_id}: {e}")
+            return {
+                'success': False,
+                'message': f"Error confirming delivery: {str(e)}"
+            }
+    
+    def get_pending_orders(self) -> List[Dict[str, Any]]:
+        """Get list of orders pending delivery"""
+        return [order for order in self.pending_orders if order['status'] == 'PENDING_DELIVERY']
+    
+    def _find_order_in_list(self, order_id: str, order_list: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Helper method to find an order by ID in a given list"""
+        for order in order_list:
+            if order['order_id'] == order_id:
+                return order
+        return None
+    
+    def get_order_status(self, order_id: str) -> Dict[str, Any]:
+        """Get status of a specific order"""
+        # Search in pending orders first, then completed orders
+        for order_list in [self.pending_orders, self.completed_orders]:
+            found_order = self._find_order_in_list(order_id, order_list)
+            if found_order:
+                return {
+                    'found': True,
+                    'status': found_order['status'],
+                    'order_details': found_order
+                }
+        
+        return {
+            'found': False,
+            'message': f"Order {order_id} not found"
+        }
     
     async def execute_order(self, order_request: OrderRequest) -> OrderResult:
-        """Execute a single order request"""
-        self.logger.info(f"Executing order for {order_request.product_name} - Quantity: {order_request.quantity}")
+        """Execute a single order request (always uses batch email mode)"""
+        self.logger.info(f"Processing order for {order_request.product_name} - Quantity: {order_request.quantity} (batch mode)")
         
         # Validate order
         validation = self.validate_order_request(order_request)
@@ -465,39 +543,44 @@ class ExecutorAgent(BaseAgent):
         if order_result.success:
             self.update_inventory_records(order_request, order_result)
         
-        self.log_order_transaction(order_request, order_result)
-        
         return order_result
     
-    async def execute_order_without_email(self, order_request: OrderRequest) -> OrderResult:
-        """Execute a single order request without sending individual email (for batch processing)"""
-        self.logger.info(f"Processing order for {order_request.product_name} - Quantity: {order_request.quantity} (batch mode)")
+    async def _process_plan_batch(self, plans: List[InventoryPlan], plan_type: str, results: Dict[str, Any], 
+                                 all_order_requests: List, all_order_ids: List, all_actual_costs: List) -> None:
+        """Helper method to process a batch of plans """
+        self.logger.info(f"Processing {len(plans)} {plan_type} priority inventory plans")
         
-        # Validate order
-        validation = self.validate_order_request(order_request)
-        
-        if not validation['valid']:
-            return OrderResult(
-                order_id="VALIDATION_FAILED",
-                success=False,
-                message=f"Validation failed: {'; '.join(validation['issues'])}"
-            )
-        
-        # Log warnings
-        for warning in validation['warnings']:
-            self.logger.warning(warning)
-        
-        # Place order (without email sending)
-        order_result = await self.simulate_order_placement_without_email(order_request)
-        
-        # Update records and log transaction
-        if order_result.success:
-            self.update_inventory_records(order_request, order_result)
-        
-        self.log_order_transaction(order_request, order_result)
-        
-        return order_result
-    
+        for plan in plans:
+            if plan.reorder_quantity > 0:
+                order_request = self.create_order_request(plan)
+                order_result = await self.execute_order(order_request)
+                
+                # Update counters based on plan type
+                if plan_type == "urgent":
+                    results['urgent_executed'] += 1
+                else:  # medium
+                    results['medium_executed'] += 1
+                
+                if order_result.success:
+                    results['successful_orders'] += 1
+                    actual_cost = self._get_actual_cost(order_result, order_request)
+                    results['total_cost'] += actual_cost
+                    
+                    # Collect successful orders for consolidated email
+                    all_order_requests.append(order_request)
+                    all_order_ids.append(order_result.order_id)
+                    all_actual_costs.append(actual_cost)
+                else:
+                    results['failed_orders'] += 1
+                
+                results['order_details'].append({
+                    'product_name': plan.product_name,
+                    'order_id': order_result.order_id,
+                    'success': order_result.success,
+                    'message': order_result.message,
+                    'cost': self._get_actual_cost(order_result, order_request)
+                })
+
     async def execute_inventory_plans(self, plans: List[InventoryPlan]) -> Dict[str, Any]:
         """Execute multiple inventory plans with consolidated email approach"""
         if self.stock_data is None:
@@ -517,75 +600,24 @@ class ExecutorAgent(BaseAgent):
             'order_details': []
         }
         
-        # Collect all orders to be executed (without sending individual emails)
+        # Collect all successful orders for consolidated email
         all_order_requests = []
         all_order_ids = []
-        all_order_results = []
         all_actual_costs = []
         
         # Process urgent plans first
-        self.logger.info(f"Processing {len(urgent_plans)} urgent inventory plans")
+        await self._process_plan_batch(urgent_plans, "urgent", results, 
+                                     all_order_requests, all_order_ids, all_actual_costs)
         
-        for plan in urgent_plans:
-            if plan.reorder_quantity > 0:
-                order_request = self.create_order_request(plan)
-                order_result = await self.execute_order_without_email(order_request)
-                
-                results['urgent_executed'] += 1
-                if order_result.success:
-                    results['successful_orders'] += 1
-                    actual_cost = order_result.actual_cost or order_request.estimated_cost
-                    results['total_cost'] += actual_cost
-                    # Collect successful orders for consolidated email
-                    all_order_requests.append(order_request)
-                    all_order_ids.append(order_result.order_id)
-                    all_order_results.append(order_result)
-                    all_actual_costs.append(actual_cost)
-                else:
-                    results['failed_orders'] += 1
-                
-                results['order_details'].append({
-                    'product_name': plan.product_name,
-                    'order_id': order_result.order_id,
-                    'success': order_result.success,
-                    'message': order_result.message,
-                    'cost': order_result.actual_cost or order_request.estimated_cost
-                })
-        
-        # Process medium priority plans (increased limit since we use consolidated emails)
-        medium_to_execute = medium_plans[:10]  # Increased limit to 10 medium priority orders
+        medium_to_execute = medium_plans[:10]  # Limit to 10 medium priority orders
         skipped_medium = medium_plans[10:] if len(medium_plans) > 10 else []
         
-        self.logger.info(f"Processing {len(medium_to_execute)} out of {len(medium_plans)} medium priority inventory plans")
         if skipped_medium:
             skipped_names = [plan.product_name for plan in skipped_medium]
-            self.logger.info(f"Skipped medium priority items: {', '.join(skipped_names)}")
+            self.logger.info(f"Skipped {len(skipped_medium)} medium priority items: {', '.join(skipped_names)}")
         
-        for plan in medium_to_execute:
-            if plan.reorder_quantity > 0:
-                order_request = self.create_order_request(plan)
-                order_result = await self.execute_order_without_email(order_request)
-                
-                results['medium_executed'] += 1
-                if order_result.success:
-                    results['successful_orders'] += 1
-                    actual_cost = order_result.actual_cost or order_request.estimated_cost
-                    results['total_cost'] += actual_cost
-                    # Collect successful orders for consolidated email
-                    all_order_requests.append(order_request)
-                    all_order_ids.append(order_result.order_id)
-                    all_order_results.append(order_result)
-                    all_actual_costs.append(actual_cost)
-                else:
-                    results['failed_orders'] += 1
-                
-                results['order_details'].append({
-                    'product_name': plan.product_name,
-                    'order_id': order_result.order_id,
-                    'success': order_result.success,
-                    'message': order_result.message,
-                    'cost': order_result.actual_cost or order_request.estimated_cost
-                })
+        await self._process_plan_batch(medium_to_execute, "medium", results, 
+                                     all_order_requests, all_order_ids, all_actual_costs)
         
         # Send consolidated email with all successful orders
         if all_order_requests:
@@ -620,6 +652,15 @@ class ExecutorAgent(BaseAgent):
         elif action == "validate_order":
             order_request = kwargs.get('order_request')
             return self.validate_order_request(order_request)
+        elif action == "confirm_delivery":
+            order_id = kwargs.get('order_id')
+            received_quantity = kwargs.get('received_quantity')
+            return self.confirm_delivery(order_id, received_quantity)
+        elif action == "get_pending_orders":
+            return self.get_pending_orders()
+        elif action == "get_order_status":
+            order_id = kwargs.get('order_id')
+            return self.get_order_status(order_id)
         else:
             raise ValueError(f"Unknown action: {action}")
 
