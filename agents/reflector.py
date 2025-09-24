@@ -54,8 +54,6 @@ class ReflectorAgent(BaseAgent):
             self.sales_data['date'] = pd.to_datetime(self.sales_data['date'])
             self.stock_data['last_updated'] = pd.to_datetime(self.stock_data['last_updated'])
             
-            # Order log loading disabled - not used in dashboard workflow
-            # This prevents creation of corrupted JSON files and unnecessary file operations
             self.order_log = []
             self.logger.info("Order log loading disabled - using empty list for compatibility")
             
@@ -146,53 +144,7 @@ class ReflectorAgent(BaseAgent):
         
         return stockout_analysis
     
-    def evaluate_supplier_performance(self) -> Dict[str, Dict[str, Any]]:
-        """Evaluate supplier performance based on order history - simplified for single supplier"""
-        if not self.order_log:
-            return {}
-        
-        # Since we have a single supplier, analyze all orders together
-        total_orders = len(self.order_log)
-        successful_orders = len([o for o in self.order_log if o['success']])
-        success_rate = successful_orders / total_orders if total_orders > 0 else 0
-        
-        # Calculate average cost variance
-        cost_variances = []
-        for order in self.order_log:
-            if order['success'] and order['actual_cost'] and order['estimated_cost']:
-                cost_variance = (order['actual_cost'] - order['estimated_cost']) / order['estimated_cost']
-                cost_variances.append(cost_variance)
-        
-        avg_cost_variance = np.mean(cost_variances) if cost_variances else 0
-        
-        # Performance scoring
-        performance_score = (
-            success_rate * 0.6 +  # Success rate weight: 60%
-            max(0, 1 - abs(avg_cost_variance)) * 0.4  # Cost accuracy weight: 40%
-        )
-        
-        supplier_performance = {
-            'SINGLE_SUPPLIER': {
-                'total_orders': total_orders,
-                'success_rate': success_rate,
-                'avg_cost_variance': avg_cost_variance,
-                'performance_score': performance_score,
-                'recommended_action': self._get_supplier_recommendation(performance_score)
-            }
-        }
-        
-        return supplier_performance
-    
-    def _get_supplier_recommendation(self, performance_score: float) -> str:
-        """Get recommendation based on supplier performance score"""
-        if performance_score >= 0.9:
-            return "PREFERRED - Excellent performance"
-        elif performance_score >= 0.7:
-            return "GOOD - Continue monitoring"
-        elif performance_score >= 0.5:
-            return "REVIEW - Performance issues detected"
-        else:
-            return "CRITICAL - Consider alternative suppliers"
+
     
     def calculate_key_performance_indicators(self) -> List[PerformanceMetrics]:
         """Calculate key performance indicators for the inventory system"""
@@ -229,22 +181,7 @@ class ReflectorAgent(BaseAgent):
             priority="CRITICAL" if stockout_risk_percentage > 15 else "LOW"
         ))
         
-        # 3. Order Success Rate
-        if self.order_log:
-            total_orders = len(self.order_log)
-            successful_orders = len([o for o in self.order_log if o['success']])
-            success_rate = (successful_orders / total_orders * 100) if total_orders > 0 else 100
-            
-            kpis.append(PerformanceMetrics(
-                metric_name="Order Success Rate (%)",
-                current_value=success_rate,
-                target_value=95.0,
-                trend="good" if success_rate >= 90 else "needs_improvement",
-                improvement_suggestion="Review supplier reliability and backup supplier options" if success_rate < 95 else "Excellent performance",
-                priority="HIGH" if success_rate < 90 else "LOW"
-            ))
-        
-        # 4. Inventory Value Efficiency
+        # 3. Inventory Value Efficiency
         total_inventory_value = sum(
             row['current_stock'] * row['unit_cost'] 
             for _, row in self.stock_data.iterrows()
@@ -316,29 +253,7 @@ class ReflectorAgent(BaseAgent):
                 estimated_benefit="Prevent revenue loss and customer dissatisfaction"
             ))
         
-        # Analyze supplier performance
-        supplier_performance = self.evaluate_supplier_performance()
-        poor_performers = [
-            sid for sid, perf in supplier_performance.items() 
-            if perf['performance_score'] < 0.7
-        ]
-        
-        if poor_performers:
-            insights.append(SystemInsight(
-                insight_type="SUPPLIER_MANAGEMENT",
-                title="Underperforming Suppliers Identified",
-                description=f"{len(poor_performers)} suppliers have performance scores below 70%.",
-                impact_level="MEDIUM",
-                recommended_actions=[
-                    "Conduct supplier performance reviews",
-                    "Negotiate improved terms and SLAs",
-                    "Identify and qualify backup suppliers",
-                    "Consider supplier diversification strategy"
-                ],
-                estimated_benefit="5-10% improvement in order reliability"
-            ))
-        
-        # Seasonal analysis insight
+        # Analyze seasonal patterns insight
         if len(self.sales_data) > 30:
             insights.append(SystemInsight(
                 insight_type="DEMAND_FORECASTING",
@@ -372,7 +287,6 @@ class ReflectorAgent(BaseAgent):
             kpis = self.calculate_key_performance_indicators()
             insights = self.generate_system_insights()
             stockout_analysis = self.analyze_stockout_risk()
-            supplier_performance = self.evaluate_supplier_performance()
             
             # Prioritize recommendations
             high_priority_kpis = [kpi for kpi in kpis if kpi.priority == "CRITICAL"]
@@ -383,7 +297,6 @@ class ReflectorAgent(BaseAgent):
                 'summary': {
                     'total_products_analyzed': len(self.stock_data),
                     'high_priority_issues': len(high_priority_kpis) + len(high_impact_insights),
-                    'suppliers_evaluated': len(supplier_performance),
                     'overall_system_health': self._calculate_system_health_score(kpis)
                 },
                 'key_performance_indicators': [
@@ -410,7 +323,6 @@ class ReflectorAgent(BaseAgent):
                     pid: analysis for pid, analysis in stockout_analysis.items()
                     if analysis['risk_level'] in ['CRITICAL', 'HIGH']
                 },
-                'supplier_performance': supplier_performance,
                 'recommendations': self._generate_prioritized_recommendations(kpis, insights)
             }
             
@@ -427,7 +339,6 @@ class ReflectorAgent(BaseAgent):
             'summary': {
                 'total_products_analyzed': 0,
                 'high_priority_issues': 0,
-                'suppliers_evaluated': 0,
                 'overall_system_health': 'UNKNOWN'
             },
             'key_performance_indicators': [],
@@ -440,7 +351,6 @@ class ReflectorAgent(BaseAgent):
                 'benefit': 'Restored system functionality'
             }],
             'stockout_risks': {},
-            'supplier_performance': {},
             'recommendations': ['Check system configuration', 'Verify data integrity', 'Contact system administrator'],
             'error': error_message
         }
@@ -632,8 +542,6 @@ class ReflectorAgent(BaseAgent):
             return self.calculate_key_performance_indicators()
         elif action == "generate_insights":
             return self.generate_system_insights()
-        elif action == "evaluate_suppliers":
-            return self.evaluate_supplier_performance()
         elif action == "analyze_stockouts":
             return self.analyze_stockout_risk()
         else:

@@ -705,7 +705,7 @@ def create_analytics_dashboard():
             'CRITICAL': 'red'
         }
         
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3 = st.columns(3)
         
         with col1:
             health = report['summary']['overall_system_health']
@@ -721,9 +721,6 @@ def create_analytics_dashboard():
         
         with col3:
             st.metric("High Priority Issues", report['summary']['high_priority_issues'])
-        
-        with col4:
-            st.metric("Suppliers Evaluated", report['summary']['suppliers_evaluated'])
         
         # Key Performance Indicators
         st.subheader("Key Performance Indicators")
