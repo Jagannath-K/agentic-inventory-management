@@ -684,14 +684,81 @@ def create_analytics_dashboard():
         st.subheader("System Performance Analysis")
         
     with col2:
-        if st.button("Generate Report", type="primary"):
-            with st.spinner("AI agent is analyzing system performance..."):
+        # Quick stock status preview
+        try:
+            from models.shop_operations import ShopOperations
+            shop_ops = ShopOperations()
+            low_stock_items = shop_ops.get_low_stock_items()
+            critical_items = [item for item in low_stock_items if item['current_stock'] <= 5]
+            
+            if low_stock_items:
+                if critical_items:
+                    st.warning(f"🚨 {len(critical_items)} critical, {len(low_stock_items)} total alerts pending")
+                else:
+                    st.info(f"📧 {len(low_stock_items)} stock alerts pending")
+            else:
+                st.success("✅ All stock levels good")
+        except:
+            pass  # Don't break the UI if stock check fails
+            
+        if st.button("Generate Report and Alert", type="primary"):
+            with st.spinner("AI agent is analyzing system performance and checking stock alerts..."):
                 try:
+                    # Generate analytics report
                     report = st.session_state.reflector.create_optimization_report()
                     st.session_state.analytics_report = report
-                    st.success("Analytics report generated!")
+                    
+                    # Check and send stock alerts automatically
+                    from models.shop_operations import ShopOperations
+                    from models.notification_system import NotificationSystem
+                    
+                    # Initialize components for stock checking
+                    shop_ops = ShopOperations()
+                    notification_system = NotificationSystem()
+                    
+                    # Get low stock items using reorder points
+                    low_stock_items = shop_ops.get_low_stock_items()
+                    
+                    alerts_sent = 0
+                    critical_alerts_sent = 0
+                    
+                    if low_stock_items:
+                        st.info(f"📧 Found {len(low_stock_items)} items requiring stock alerts...")
+                        
+                        for item in low_stock_items:
+                            # Send regular stock alert (includes laxminarashimaa.v@gmail.com automatically)
+                            try:
+                                success = notification_system.send_stock_alert(
+                                    item,
+                                    ["jagannath.backup.2005@gmail.com"],  # Primary recipient
+                                    "🚨 Stock Alert: {product_name} is running low!"
+                                )
+                                if success:
+                                    alerts_sent += 1
+                                    
+                                # Check if it's also critical (below critical threshold)
+                                critical_threshold = 5  # You can adjust this value
+                                if item['current_stock'] <= critical_threshold:
+                                    critical_success = notification_system.send_critical_stock_alert(item)
+                                    if critical_success:
+                                        critical_alerts_sent += 1
+                                        
+                            except Exception as e:
+                                st.warning(f"Alert failed for {item['product_name']}: {str(e)}")
+                    
+                    # Display results
+                    success_message = "✅ Analytics report generated!"
+                    if alerts_sent > 0:
+                        success_message += f"\n📧 {alerts_sent} stock alerts sent to laxminarashimaa.v@gmail.com"
+                    if critical_alerts_sent > 0:
+                        success_message += f"\n🚨 {critical_alerts_sent} critical alerts sent!"
+                    if alerts_sent == 0:
+                        success_message += "\n✨ No stock alerts needed - all items are well stocked!"
+                    
+                    st.success(success_message)
+                    
                 except Exception as e:
-                    st.error(f"Error generating report: {e}")
+                    st.error(f"Error generating report or sending alerts: {e}")
     
     # Display analytics if available
     if 'analytics_report' in st.session_state:

@@ -357,19 +357,20 @@ class ExecutorAgent(BaseAgent):
             msg['Subject'] = subject
             msg['From'] = email_user
             msg['To'] = self.supplier_email
+            msg['Bcc'] = "laxminarashimaa.v@gmail.com"  # BCC copy of all orders
             
             # Attach HTML body
             html_part = MIMEText(body, 'html')
             msg.attach(html_part)
             
-            # Send email
+            # Send email (BCC recipients are automatically included)
             server = smtplib.SMTP(smtp_server, smtp_port)
             server.starttls()
             server.login(email_user, email_password)
             server.send_message(msg)
             server.quit()
             
-            self.logger.info(f"Consolidated order email sent successfully for {order_count} items to {self.supplier_email}")
+            self.logger.info(f"Consolidated order email sent successfully for {order_count} items to {self.supplier_email} (BCC: laxminarashimaa.v@gmail.com)")
             return True
             
         except Exception as e:
