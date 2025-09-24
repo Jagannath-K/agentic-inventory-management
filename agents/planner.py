@@ -58,7 +58,6 @@ class PlannerAgent(BaseAgent):
         try:
             self.sales_data = pd.read_csv('data/sales.csv')
             self.stock_data = pd.read_csv('data/stock.csv')
-            # Removed supplier data loading - using single supplier for all items
             
             # Convert date columns with error handling
             self.sales_data['date'] = pd.to_datetime(self.sales_data['date'], errors='coerce')
@@ -151,7 +150,6 @@ class PlannerAgent(BaseAgent):
         # Get product info
         product_info = self.stock_data[self.stock_data['product_id'] == product_id].iloc[0]
         
-        # Use standard lead time since we don't have supplier data
         lead_time = 3  # Standard 3-day lead time for local suppliers
         
         # Get demand analysis
@@ -201,7 +199,6 @@ class PlannerAgent(BaseAgent):
         else:
             eoq = product_info['max_stock'] - product_info['current_stock']
         
-        # Ensure minimum order requirements (use default since no supplier data)
         min_order = 10  # Default minimum order quantity
         
         optimal_quantity = max(int(eoq), min_order)
