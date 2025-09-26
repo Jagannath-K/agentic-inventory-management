@@ -38,6 +38,11 @@ class DemandPredictor:
         self.model_performance = {}
         self.sales_data = None
         self.stock_data = None
+        
+        # Dynamic seasonality patterns learned from data
+        self.product_seasonality = {}  # Store learned seasonal patterns per product
+        self.global_seasonality = {}   # Store global seasonal patterns across all products
+        
         self.reasoning_patterns = {
             'month_start': "Higher demand expected due to salary payments (1st-5th of month)",
             'month_mid': "Moderate demand expected during mid-month period",
@@ -61,6 +66,145 @@ class DemandPredictor:
         except Exception as e:
             logger.error(f"Error loading data: {e}")
             raise
+    
+    def learn_seasonal_patterns(self, product_id: str = None) -> None:
+        """Learn seasonal patterns from historical sales data"""
+        if self.sales_data is None:
+            self.load_data()
+        
+        if product_id:
+            # Learn patterns for specific product
+            product_sales = self.sales_data[self.sales_data['product_id'] == product_id]
+            if not product_sales.empty:
+                self.product_seasonality[product_id] = self._analyze_seasonality(product_sales)
+                logger.info(f"Learned seasonal patterns for product {product_id}")
+        else:
+            # Learn global patterns across all products
+            self.global_seasonality = self._analyze_seasonality(self.sales_data)
+            logger.info("Learned global seasonal patterns across all products")
+    
+    def _analyze_seasonality(self, sales_data: pd.DataFrame) -> dict:
+        """Analyze seasonal patterns in sales data"""
+        if sales_data.empty:
+            return {
+                'monthly': {},
+                'daily': {},
+                'weekly': {},
+                'day_of_month': {}
+            }
+        
+        patterns = {}
+        
+        # Monthly seasonality (1-12)
+        monthly_sales = sales_data.groupby(sales_data['date'].dt.month)['quantity_sold'].mean()
+        if not monthly_sales.empty:
+            monthly_avg = monthly_sales.mean()
+            patterns['monthly'] = {
+                month: (demand / monthly_avg) if monthly_avg > 0 else 1.0 
+                for month, demand in monthly_sales.items()
+            }
+        else:
+            patterns['monthly'] = {}
+        
+        # Day of week seasonality (0=Monday, 6=Sunday)  
+        daily_sales = sales_data.groupby(sales_data['date'].dt.dayofweek)['quantity_sold'].mean()
+        if not daily_sales.empty:
+            daily_avg = daily_sales.mean()
+            patterns['daily'] = {
+                day: (demand / daily_avg) if daily_avg > 0 else 1.0
+                for day, demand in daily_sales.items()
+            }
+        else:
+            patterns['daily'] = {}
+        
+        # Week of year seasonality (if enough data - at least 52 weeks)
+        if len(sales_data) > 365:
+            weekly_sales = sales_data.groupby(sales_data['date'].dt.isocalendar().week)['quantity_sold'].mean()
+            if not weekly_sales.empty:
+                weekly_avg = weekly_sales.mean()
+                patterns['weekly'] = {
+                    week: (demand / weekly_avg) if weekly_avg > 0 else 1.0
+                    for week, demand in weekly_sales.items()
+                }
+            else:
+                patterns['weekly'] = {}
+        else:
+            patterns['weekly'] = {}
+        
+        # Day of month seasonality (salary cycle patterns)
+        day_of_month_sales = sales_data.groupby(sales_data['date'].dt.day)['quantity_sold'].mean()
+        if not day_of_month_sales.empty:
+            dom_avg = day_of_month_sales.mean()
+            patterns['day_of_month'] = {
+                day: (demand / dom_avg) if dom_avg > 0 else 1.0
+                for day, demand in day_of_month_sales.items()
+            }
+        else:
+            patterns['day_of_month'] = {}
+        
+        return patterns
+    
+    def get_seasonal_factor(self, product_id: str, target_date: datetime) -> float:
+        """Get dynamic seasonal factor based on learned patterns"""
+        # Try product-specific patterns first
+        if product_id in self.product_seasonality:
+            patterns = self.product_seasonality[product_id]
+        elif self.global_seasonality:
+            # Fallback to global patterns
+            patterns = self.global_seasonality
+        else:
+            # Learn patterns if not available
+            self.learn_seasonal_patterns(product_id)
+            patterns = self.product_seasonality.get(product_id, {})
+        
+        seasonal_factors = []
+        
+        # Monthly seasonality
+        month_patterns = patterns.get('monthly', {})
+        if month_patterns:
+            monthly_factor = month_patterns.get(target_date.month, 1.0)
+            seasonal_factors.append(monthly_factor)
+        
+        # Day of week seasonality  
+        daily_patterns = patterns.get('daily', {})
+        if daily_patterns:
+            daily_factor = daily_patterns.get(target_date.weekday(), 1.0)
+            seasonal_factors.append(daily_factor)
+        
+        # Day of month seasonality (salary cycles)
+        dom_patterns = patterns.get('day_of_month', {})
+        if dom_patterns:
+            dom_factor = dom_patterns.get(target_date.day, 1.0)
+            seasonal_factors.append(dom_factor)
+        
+        # Weekly seasonality (if available)
+        weekly_patterns = patterns.get('weekly', {})
+        if weekly_patterns:
+            week_num = target_date.isocalendar().week
+            weekly_factor = weekly_patterns.get(week_num, 1.0)
+            seasonal_factors.append(weekly_factor)
+        
+        # Combine seasonal factors (weighted average)
+        if seasonal_factors:
+            # Give more weight to monthly and daily patterns
+            weights = []
+            if month_patterns:
+                weights.append(0.4)  # Monthly gets 40% weight
+            if daily_patterns:
+                weights.append(0.3)  # Daily gets 30% weight  
+            if dom_patterns:
+                weights.append(0.2)  # Day of month gets 20% weight
+            if weekly_patterns:
+                weights.append(0.1)  # Weekly gets 10% weight
+            
+            # Normalize weights
+            total_weight = sum(weights[:len(seasonal_factors)])
+            weights = [w/total_weight for w in weights[:len(seasonal_factors)]]
+            
+            return sum(factor * weight for factor, weight in zip(seasonal_factors, weights))
+        
+        # Fallback to neutral factor if no patterns available
+        return 1.0
     
     def create_features(self, product_id: str, target_date: datetime = None) -> pd.DataFrame:
         """Create feature matrix for demand prediction"""
@@ -146,12 +290,8 @@ class DemandPredictor:
             else:
                 features['price_trend'] = 0
             
-            # Seasonal factors (simplified - based on month for Indian market)
-            seasonal_multipliers = {
-                1: 0.9, 2: 0.8, 3: 0.9, 4: 1.0, 5: 1.1, 6: 1.2,
-                7: 1.3, 8: 1.2, 9: 1.0, 10: 1.1, 11: 1.3, 12: 1.4
-            }
-            features['seasonal_factor'] = seasonal_multipliers.get(current_date.month, 1.0)
+            # Dynamic seasonal factors based on learned patterns
+            features['seasonal_factor'] = self.get_seasonal_factor(product_id, current_date)
             
             # Target variable
             features['target'] = row['quantity_sold']
@@ -242,12 +382,8 @@ class DemandPredictor:
         else:
             features['price_trend'] = 0
         
-        # Seasonal factors (simplified - based on month for Indian market)
-        seasonal_multipliers = {
-            1: 0.9, 2: 0.8, 3: 0.9, 4: 1.0, 5: 1.1, 6: 1.2,
-            7: 1.3, 8: 1.2, 9: 1.0, 10: 1.1, 11: 1.3, 12: 1.4
-        }
-        features['seasonal_factor'] = seasonal_multipliers.get(target_date.month, 1.0)
+        # Dynamic seasonal factors based on learned patterns
+        features['seasonal_factor'] = self.get_seasonal_factor(product_id, target_date)
         
         return pd.DataFrame([features])
 
@@ -514,7 +650,19 @@ class DemandPredictor:
         else:
             reasoning_parts.append("📊 Prediction based on historical average demand analysis")
         
-        # Seasonal considerations
+        # Seasonal considerations using learned patterns
+        current_seasonal_factor = self.get_seasonal_factor(product_id, target_date)
+        
+        if current_seasonal_factor > 1.2:
+            reasoning_parts.append(f"📈 Strong seasonal boost expected (factor: {current_seasonal_factor:.2f}) based on historical patterns")
+        elif current_seasonal_factor > 1.1:
+            reasoning_parts.append(f"📊 Moderate seasonal increase expected (factor: {current_seasonal_factor:.2f}) from learned data")
+        elif current_seasonal_factor < 0.8:
+            reasoning_parts.append(f"📉 Seasonal decline expected (factor: {current_seasonal_factor:.2f}) based on historical trends")
+        elif current_seasonal_factor < 0.9:
+            reasoning_parts.append(f"📊 Slight seasonal decrease expected (factor: {current_seasonal_factor:.2f}) from data patterns")
+        
+        # Traditional seasonal context (festivals, etc.)
         if month in [10, 11]:  # Festival season
             reasoning_parts.append("🎆 Festival season may increase demand for certain categories")
         elif month in [3, 4]:  # Summer season
@@ -539,26 +687,37 @@ class DemandPredictor:
         return predictions
     
     def save_models(self, filepath_prefix: str = "models/demand_predictor") -> None:
-        """Save trained models to disk"""
+        """Save trained models and learned seasonality patterns to disk"""
         os.makedirs(os.path.dirname(filepath_prefix), exist_ok=True)
         
-        # Save all components
+        # Save all components including seasonality patterns
         joblib.dump(self.trained_models, f"{filepath_prefix}_models.pkl")
         joblib.dump(self.scalers, f"{filepath_prefix}_scalers.pkl")
         joblib.dump(self.feature_importance, f"{filepath_prefix}_importance.pkl")
         joblib.dump(self.model_performance, f"{filepath_prefix}_performance.pkl")
+        joblib.dump(self.product_seasonality, f"{filepath_prefix}_seasonality.pkl")
+        joblib.dump(self.global_seasonality, f"{filepath_prefix}_global_seasonality.pkl")
         
-        logger.info(f"Models saved to {filepath_prefix}")
+        logger.info(f"Models and seasonality patterns saved to {filepath_prefix}")
     
     def load_models(self, filepath_prefix: str = "models/demand_predictor") -> None:
-        """Load trained models from disk"""
+        """Load trained models and learned seasonality patterns from disk"""
         try:
             self.trained_models = joblib.load(f"{filepath_prefix}_models.pkl")
             self.scalers = joblib.load(f"{filepath_prefix}_scalers.pkl")
             self.feature_importance = joblib.load(f"{filepath_prefix}_importance.pkl")
             self.model_performance = joblib.load(f"{filepath_prefix}_performance.pkl")
             
-            logger.info(f"Models loaded from {filepath_prefix}")
+            # Load seasonality patterns (with fallback for backward compatibility)
+            try:
+                self.product_seasonality = joblib.load(f"{filepath_prefix}_seasonality.pkl")
+                self.global_seasonality = joblib.load(f"{filepath_prefix}_global_seasonality.pkl")
+                logger.info(f"Models and seasonality patterns loaded from {filepath_prefix}")
+            except FileNotFoundError:
+                logger.warning("Seasonality patterns not found, will learn from data when needed")
+                self.product_seasonality = {}
+                self.global_seasonality = {}
+                
         except Exception as e:
             logger.error(f"Error loading models: {e}")
     
@@ -566,6 +725,58 @@ class DemandPredictor:
         """Get feature importance for a specific product and model"""
         key = f"{product_id}_{model_name}"
         return self.feature_importance.get(key, {})
+    
+    def get_seasonality_insights(self, product_id: str) -> Dict[str, Any]:
+        """Get seasonality insights for a specific product"""
+        if product_id not in self.product_seasonality:
+            self.learn_seasonal_patterns(product_id)
+        
+        patterns = self.product_seasonality.get(product_id, {})
+        if not patterns:
+            return {"message": "No seasonality patterns available for this product"}
+        
+        insights = {}
+        
+        # Monthly insights
+        monthly = patterns.get('monthly', {})
+        if monthly:
+            peak_month = max(monthly.items(), key=lambda x: x[1])
+            low_month = min(monthly.items(), key=lambda x: x[1])
+            insights['monthly'] = {
+                'peak_month': {'month': peak_month[0], 'factor': peak_month[1]},
+                'low_month': {'month': low_month[0], 'factor': low_month[1]},
+                'all_factors': monthly
+            }
+        
+        # Daily insights (day of week)
+        daily = patterns.get('daily', {})
+        if daily:
+            peak_day = max(daily.items(), key=lambda x: x[1])
+            low_day = min(daily.items(), key=lambda x: x[1])
+            day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+            insights['daily'] = {
+                'peak_day': {'day': day_names[peak_day[0]], 'factor': peak_day[1]},
+                'low_day': {'day': day_names[low_day[0]], 'factor': low_day[1]},
+                'weekend_vs_weekday': {
+                    'weekend_avg': np.mean([daily.get(5, 1.0), daily.get(6, 1.0)]),
+                    'weekday_avg': np.mean([daily.get(i, 1.0) for i in range(5)])
+                }
+            }
+        
+        # Day of month insights (salary cycle)
+        dom = patterns.get('day_of_month', {})
+        if dom:
+            month_start_avg = np.mean([dom.get(i, 1.0) for i in range(1, 6)])  # 1-5
+            month_mid_avg = np.mean([dom.get(i, 1.0) for i in range(15, 19)])   # 15-18
+            month_end_avg = np.mean([dom.get(i, 1.0) for i in range(26, 32)])   # 26-31
+            
+            insights['salary_cycle'] = {
+                'month_start_factor': month_start_avg,
+                'month_mid_factor': month_mid_avg,
+                'month_end_factor': month_end_avg
+            }
+        
+        return insights
     
     def evaluate_model_performance(self, product_id: str) -> Dict[str, Any]:
         """Get comprehensive model performance evaluation"""
