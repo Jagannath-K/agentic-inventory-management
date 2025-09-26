@@ -521,18 +521,6 @@ class DemandPredictor:
             reasoning_parts.append("☀️ Summer season patterns considered in demand calculation")
         
         return " | ".join(reasoning_parts)
-        
-        # Confidence decreases with higher standard deviation
-        confidence = max(0.1, 1 - (prediction_std / (mean_prediction + 1)))
-        
-        return {
-            'predicted_demand': ensemble_prediction,
-            'method': 'ensemble_ml',
-            'confidence': confidence,
-            'model_predictions': model_predictions,
-            'ensemble_prediction': ensemble_prediction,
-            'prediction_std': prediction_std
-        }
     
     def batch_predict(self, product_ids: List[str], days_ahead: int = 7) -> Dict[str, Dict[str, Any]]:
         """Predict demand for multiple products over multiple days"""
@@ -595,72 +583,7 @@ class DemandPredictor:
             'feature_importance': self.get_feature_importance(product_id, best_model)
         }
 
-class SeasonalityAnalyzer:
-    """
-    Analyze seasonal patterns in demand data
-    """
-    
-    def __init__(self):
-        self.sales_data = None
-        
-    def load_data(self):
-        """Load sales data"""
-        self.sales_data = pd.read_csv('data/sales.csv')
-        self.sales_data['date'] = pd.to_datetime(self.sales_data['date'], errors='coerce')
-    
-    def analyze_seasonal_patterns(self, product_id: str) -> Dict[str, Any]:
-        """Analyze seasonal patterns for a product"""
-        if self.sales_data is None:
-            self.load_data()
-        
-        product_sales = self.sales_data[self.sales_data['product_id'] == product_id]
-        
-        if product_sales.empty:
-            return {}
-        
-        # Group by different time periods
-        patterns = {}
-        
-        # Day of week pattern
-        dow_sales = product_sales.groupby(product_sales['date'].dt.dayofweek)['quantity_sold'].mean()
-        patterns['day_of_week'] = dow_sales.to_dict()
-        
-        # Month pattern
-        month_sales = product_sales.groupby(product_sales['date'].dt.month)['quantity_sold'].mean()
-        patterns['month'] = month_sales.to_dict()
-        
-        # Week of year pattern (if enough data)
-        if len(product_sales) > 52:
-            week_sales = product_sales.groupby(product_sales['date'].dt.isocalendar().week)['quantity_sold'].mean()
-            patterns['week_of_year'] = week_sales.to_dict()
-        
-        return patterns
-    
-    def get_seasonal_multiplier(self, product_id: str, target_date: datetime) -> float:
-        """Get seasonal multiplier for a specific date"""
-        patterns = self.analyze_seasonal_patterns(product_id)
-        
-        if not patterns:
-            return 1.0
-        
-        multipliers = []
-        
-        # Day of week multiplier
-        if 'day_of_week' in patterns:
-            dow_pattern = patterns['day_of_week']
-            avg_dow = np.mean(list(dow_pattern.values()))
-            dow_multiplier = dow_pattern.get(target_date.weekday(), avg_dow) / avg_dow
-            multipliers.append(dow_multiplier)
-        
-        # Month multiplier
-        if 'month' in patterns:
-            month_pattern = patterns['month']
-            avg_month = np.mean(list(month_pattern.values()))
-            month_multiplier = month_pattern.get(target_date.month, avg_month) / avg_month
-            multipliers.append(month_multiplier)
-        
-        # Return average multiplier
-        return np.mean(multipliers) if multipliers else 1.0
+
 
 if __name__ == "__main__":
     # Test the demand predictor
