@@ -154,7 +154,6 @@ def load_data():
     try:
         sales_data = pd.read_csv('data/sales.csv')
         stock_data = pd.read_csv('data/stock.csv')
-        # Removed supplier data loading - using single supplier for all items
         
         # Parse dates with modern pandas approach
         sales_data['date'] = pd.to_datetime(sales_data['date'], errors='coerce')
@@ -726,11 +725,10 @@ def create_analytics_dashboard():
                         st.info(f"📧 Found {len(low_stock_items)} items requiring stock alerts...")
                         
                         for item in low_stock_items:
-                            # Send regular stock alert (includes laxminarashimaa.v@gmail.com automatically)
                             try:
                                 success = notification_system.send_stock_alert(
                                     item,
-                                    ["jagannath.backup.2005@gmail.com"],  # Primary recipient
+                                    [],  # Recipients configured in notification system
                                     "🚨 Stock Alert: {product_name} is running low!"
                                 )
                                 if success:
@@ -749,7 +747,7 @@ def create_analytics_dashboard():
                     # Display results
                     success_message = "✅ Analytics report generated!"
                     if alerts_sent > 0:
-                        success_message += f"\n📧 {alerts_sent} stock alerts sent to laxminarashimaa.v@gmail.com"
+                        success_message += f"\n📧 {alerts_sent} stock alerts sent to registered recipients"
                     if critical_alerts_sent > 0:
                         success_message += f"\n🚨 {critical_alerts_sent} critical alerts sent!"
                     if alerts_sent == 0:
@@ -1038,12 +1036,10 @@ def create_daily_sales_entry():
             bulk_qty = st.number_input("Qty", min_value=1, value=1, key="bulk_qty")
         
         with col3:
-            # Get fixed price from stock data - user cannot modify
             product_info = stock_data[stock_data['product_name'] == bulk_product].iloc[0]
             fixed_price = product_info['unit_cost']
             st.number_input("Price ₹ (Fixed)", min_value=0.0, value=float(fixed_price), key="bulk_price", disabled=True, help="Prices are fixed and cannot be changed")
-            bulk_price = fixed_price  # Use the fixed price from stock data
-        
+            bulk_price = fixed_price  
         with col4:
             if st.button("➕ Add", key="add_bulk"):
                 product_info = stock_data[stock_data['product_name'] == bulk_product].iloc[0]
@@ -1119,7 +1115,7 @@ def create_daily_sales_entry():
                 st.markdown("#### Today's Sales by Product")
                 product_sales = today_sales.groupby('product_name').agg({
                     'quantity_sold': 'sum',
-                    'unit_price': 'first'  # Get the unit price (should be same for all records of a product)
+                    'unit_price': 'first'  
                 }).round(2)
                 
                 if len(product_sales) > 0:

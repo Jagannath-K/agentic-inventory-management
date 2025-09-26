@@ -46,13 +46,6 @@ Edit `config.json` to customize:
 
 - `data/sales.csv`: Historical sales data
 - `data/stock.csv`: Current inventory levels
-- `data/suppliers.csv`: Supplier information
-
-## Getting Help
-
-- Check the logs in `inventory_system.log`
-- Review the documentation in `paper/agentic_inventory_paper.docx`
-- Ensure all data files are properly formatted
 
 ## Troubleshooting
 

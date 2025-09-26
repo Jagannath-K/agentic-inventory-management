@@ -14,7 +14,7 @@
     "weekly_analytics": true,
     "critical_alerts": true,
     "stock_alert_recipients": [
-      "jagannath.backup.2005@gmail.com"
+      "configured_via_environment"
     ],
     "email_template_subject": "🚨 Stock Alert: {product_name} is running low!"
   },

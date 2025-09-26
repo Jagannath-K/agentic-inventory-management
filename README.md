@@ -9,27 +9,43 @@ A sophisticated multi-agent system for intelligent inventory management using AI
 - **Automated Reordering**: Smart inventory replenishment based on predictive models
 - **Real-time Monitoring**: Continuous tracking of inventory levels and performance
 - **Interactive Dashboard**: Streamlit-based UI for visualization and control
-- **Supplier Management**: Automated supplier selection and order optimization
 
 ## System Architecture
 
 ```
 agentic-inventory/
-├── data/                   # Data storage
-│   ├── sales.csv          # Historical sales data
-│   ├── stock.csv          # Current inventory levels
-│   └── suppliers.csv      # Supplier information
-├── agents/                # AI agent modules
-│   ├── planner.py         # Planning agent for strategy
-│   ├── executor.py        # Execution agent for actions
-│   └── reflector.py       # Reflection agent for optimization
-├── models/                # ML models
-│   └── predictor.py       # Demand prediction models
-├── ui/                    # User interface
-│   └── app.py            # Streamlit dashboard
-├── main.py               # Main application entry point
-└── paper/                # Documentation
-    └── agentic_inventory_paper.docx
+├── .env                          # Environment variables (secure)
+├── .git/                         # Git version control
+├── .gitignore                    # Git ignore rules
+├── agents/                       # AI agent modules
+│   ├── __init__.py              # Package initialization
+│   ├── executor.py              # ExecutorAgent for order execution
+│   ├── planner.py               # PlannerAgent for inventory planning
+│   ├── reflector.py             # ReflectorAgent for system optimization
+│   └── __pycache__/             # Python cache
+├── config.json                   # System configuration settings
+├── data/                         # Data storage
+│   ├── sales.csv                # Historical sales transactions
+│   └── stock.csv                # Current inventory levels
+├── models/                       # ML models and business logic
+│   ├── __init__.py              # Package initialization
+│   ├── predictor.py             # Enhanced ML demand prediction
+│   ├── notification_system.py   # Email alert system
+│   ├── shop_operations.py       # Business operations logic
+│   ├── demand_predictor_*.pkl   # Trained ML models (4 files)
+│   ├── last_training.txt        # ML training metadata
+│   └── __pycache__/             # Python cache
+├── ui/                          # User interface
+│   └── app.py                   # Professional Streamlit dashboard
+├── inventory_system.log         # System logging
+├── main.py                      # Main application entry point
+├── QUICK_START.md               # Quick setup guide
+├── README.md                    # Project documentation
+├── requirements.txt             # Python dependencies
+├── run.bat                      # Windows launcher script
+├── run.sh                       # Unix/Linux launcher script
+├── STATUS.md                    # System status documentation
+└── venv/                        # Python virtual environment
 ```
 
 ## Installation

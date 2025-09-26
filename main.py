@@ -10,6 +10,10 @@ from typing import Dict, Any, List
 import pandas as pd
 import os
 import sys
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Set up logging
 logging.basicConfig(
@@ -72,7 +76,7 @@ class InventoryManagementSystem:
             'default_reorder_buffer_days': 7,
             # Email settings
             'email_notifications_enabled': True,
-            'stock_alert_recipients': ['manager@yourstore.com'],
+            'stock_alert_recipients': [os.getenv('CRITICAL_ALERT_RECIPIENT', 'alerts@example.com')],
             'email_template_subject': 'Stock Alert: {product_name} is running low',
         }
         
@@ -259,9 +263,6 @@ class InventoryManagementSystem:
             logger.error(f"Error in inventory cycle: {e}")
             cycle_results['errors'].append(str(e))
         
-        # Save cycle results for tracking
-        self.save_cycle_results(cycle_results)
-        
         return cycle_results
     
     def should_retrain_models(self) -> bool:
@@ -310,60 +311,12 @@ class InventoryManagementSystem:
         except Exception as e:
             logger.error(f"Error during model retraining: {e}")
     
-    def save_cycle_results(self, results: Dict[str, Any]) -> None:
-        """Save cycle results for historical tracking"""
-        try:
-            import json
-            
-            # Load existing results
-            results_file = 'data/cycle_results.json'
-            if os.path.exists(results_file):
-                with open(results_file, 'r') as f:
-                    all_results = json.load(f)
-            else:
-                all_results = []
-            
-            # Convert datetime to string for JSON serialization
-            results_copy = results.copy()
-            results_copy['timestamp'] = results['timestamp'].isoformat()
-            
-            # Add to results
-            all_results.append(results_copy)
-            
-            # Keep only last 100 results
-            all_results = all_results[-100:]
-            
-            # Save back
-            os.makedirs('data', exist_ok=True)
-            with open(results_file, 'w') as f:
-                json.dump(all_results, f, indent=2)
-                
-        except Exception as e:
-            logger.error(f"Error saving cycle results: {e}")
-    
-    def send_notification(self, message: str, priority: str = 'INFO') -> None:
-        """Send notification (placeholder for email/SMS integration)"""
-        try:
-            # In a real system, integrate with email/SMS service
-            logger.info(f"NOTIFICATION [{priority}]: {message}")
-            
-            # Could integrate with services like SendGrid, Twilio, etc.
-            if self.system_config.get('notification_email'):
-                # Email notification implementation would go here
-                pass
-                
-        except Exception as e:
-            logger.error(f"Error sending notification: {e}")
-    
     def start_scheduler(self) -> None:
         """Start the automated scheduler"""
         interval_hours = self.system_config['run_interval_hours']
-        
         logger.info(f"Scheduler started - running every {interval_hours} hours")
         
         last_run = datetime.now()
-        last_daily_report = datetime.now().date()
-        last_weekly_report = datetime.now().date()
         
         # Run scheduler loop
         while True:
@@ -377,80 +330,7 @@ class InventoryManagementSystem:
                 except Exception as e:
                     logger.error(f"Error running inventory cycle: {e}")
             
-            # Check for daily report (run at 8 AM)
-            if (current_time.date() != last_daily_report and 
-                current_time.hour >= 8):
-                try:
-                    self.generate_daily_report()
-                    last_daily_report = current_time.date()
-                except Exception as e:
-                    logger.error(f"Error generating daily report: {e}")
-            
-            # Check for weekly report (run on Monday at 9 AM)
-            if (current_time.weekday() == 0 and  # Monday
-                current_time.hour >= 9 and
-                current_time.date() != last_weekly_report):
-                try:
-                    self.generate_weekly_analytics()
-                    last_weekly_report = current_time.date()
-                except Exception as e:
-                    logger.error(f"Error generating weekly analytics: {e}")
-            
             time.sleep(60)  # Check every minute
-    
-    def generate_daily_report(self) -> None:
-        """Generate daily summary report"""
-        try:
-            logger.info("Generating daily report")
-            
-            # Get yesterday's data
-            yesterday = datetime.now() - timedelta(days=1)
-            
-            # Generate report
-            report = self.reflector.create_optimization_report()
-            
-            # Create summary message
-            summary = f"""
-            Daily Inventory Report - {yesterday.strftime('%Y-%m-%d')}
-            
-            System Health: {report['summary']['overall_system_health']}
-            High Priority Issues: {report['summary']['high_priority_issues']}
-            Orders Placed: {self.daily_stats['orders_placed']}
-            Total Spent: ${self.daily_stats['total_spent']:.2f}
-            
-            Top Recommendations:
-            {chr(10).join(f"- {rec}" for rec in report['recommendations'][:3])}
-            """
-            
-            self.send_notification(summary, 'DAILY_REPORT')
-            
-        except Exception as e:
-            logger.error(f"Error generating daily report: {e}")
-    
-    def generate_weekly_analytics(self) -> None:
-        """Generate weekly analytics summary"""
-        try:
-            logger.info("Generating weekly analytics")
-            
-            # Detailed analytics would go here
-            # For now, just send a summary
-            
-            analytics = self.reflector.create_optimization_report()
-            
-            summary = f"""
-            Weekly Inventory Analytics
-            
-            System Performance: {analytics['summary']['overall_system_health']}
-            Critical Insights: {len([i for i in analytics['critical_insights'] if i['impact_level'] == 'HIGH'])}
-            
-            Key Metrics:
-            {chr(10).join(f"- {kpi['metric']}: {kpi['current']:.2f}" for kpi in analytics['key_performance_indicators'][:5])}
-            """
-            
-            self.send_notification(summary, 'WEEKLY_ANALYTICS')
-            
-        except Exception as e:
-            logger.error(f"Error generating weekly analytics: {e}")
     
     async def run_interactive_mode(self) -> None:
         """Run system in interactive mode"""

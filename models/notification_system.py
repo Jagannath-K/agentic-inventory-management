@@ -28,8 +28,8 @@ class NotificationSystem:
         self.email_user = os.getenv('EMAIL_USER')
         self.email_password = os.getenv('EMAIL_PASSWORD')
         
-        # Critical alert recipient for stock and system alerts
-        self.critical_alert_recipient = "laxminarashimaa.v@gmail.com"
+        # Critical alert recipient from environment variables
+        self.critical_alert_recipient = os.getenv('CRITICAL_ALERT_RECIPIENT')
         
         # Verify email configuration
         if not self.email_user or not self.email_password:
@@ -223,7 +223,7 @@ class NotificationSystem:
             
             <div class="footer">
                 <p>🏪 This alert was generated automatically by your AI-Powered Grocery Inventory Management System.</p>
-                <p>📧 Email: jagannath.backup.2005@gmail.com | 🕒 Generated at: {current_time}</p>
+                <p>📧 Email: {os.getenv('SUPPLIER_EMAIL', 'support@example.com')} | 🕒 Generated at: {current_time}</p>
                 <p><em>Transforming grocery retail through intelligent automation</em></p>
             </div>
         </body>

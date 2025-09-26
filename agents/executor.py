@@ -12,6 +12,10 @@ import json
 import asyncio
 import os
 import sys
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Add models to path for demand prediction
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -47,11 +51,11 @@ class ExecutorAgent(BaseAgent):
     AI Agent responsible for executing inventory decisions and managing orders
     """
     
-    # Email configuration constants
-    EMAIL_SMTP_SERVER = "smtp.gmail.com"
-    EMAIL_SMTP_PORT = 587
-    EMAIL_USER = "kjagannath321@gmail.com"
-    EMAIL_PASSWORD = "hkpu bisz volr vjgr"
+    # Email configuration from environment variables
+    EMAIL_SMTP_SERVER = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+    EMAIL_SMTP_PORT = int(os.getenv('EMAIL_PORT', '587'))
+    EMAIL_USER = os.getenv('EMAIL_USER')
+    EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD')
     
     def __init__(self):
         super().__init__("ExecutorAgent")
@@ -62,7 +66,7 @@ class ExecutorAgent(BaseAgent):
         self.order_counter = 1000
         self.demand_predictor = DemandPredictor()
         self.notification_system = NotificationSystem()
-        self.supplier_email = "jagannath.backup.2005@gmail.com"  # Single supplier email
+        self.supplier_email = os.getenv('SUPPLIER_EMAIL', 'supplier@example.com')  # From environment
         
     def load_data(self) -> None:
         """Load necessary data for execution"""
@@ -357,7 +361,7 @@ class ExecutorAgent(BaseAgent):
             msg['Subject'] = subject
             msg['From'] = email_user
             msg['To'] = self.supplier_email
-            msg['Bcc'] = "laxminarashimaa.v@gmail.com"  # BCC copy of all orders
+            msg['Bcc'] = os.getenv('STOCK_ALERT_BCC', '')  # BCC copy from environment
             
             # Attach HTML body
             html_part = MIMEText(body, 'html')
@@ -370,7 +374,7 @@ class ExecutorAgent(BaseAgent):
             server.send_message(msg)
             server.quit()
             
-            self.logger.info(f"Consolidated order email sent successfully for {order_count} items to {self.supplier_email} (BCC: laxminarashimaa.v@gmail.com)")
+            self.logger.info(f"Consolidated order email sent successfully for {order_count} items to {self.supplier_email} (BCC: {os.getenv('STOCK_ALERT_BCC', 'none')})")
             return True
             
         except Exception as e:
