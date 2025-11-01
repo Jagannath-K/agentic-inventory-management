@@ -1,0 +1,58 @@
+{
+  "system_name": "Agentic Inventory Management System",
+  "version": "1.0.0",
+  "auto_execute_critical": true,
+  "auto_execute_high": false,
+  "auto_execute_medium": false,
+  "max_daily_orders": 20,
+  "max_daily_budget": 50000.0,
+  "run_interval_hours": 6,
+  "notification_settings": {
+    "email_enabled": true,
+    "email_address": "",
+    "daily_reports": true,
+    "weekly_analytics": true,
+    "critical_alerts": true,
+    "stock_alert_recipients": [
+      "configured_via_environment"
+    ],
+    "email_template_subject": "🚨 Stock Alert: {product_name} is running low!"
+  },
+  "forecasting_settings": {
+    "default_forecast_days": 30,
+    "min_historical_days": 7,
+    "retrain_interval_days": 7,
+    "confidence_threshold": 0.7
+  },
+  "inventory_settings": {
+    "safety_stock_service_level": 0.95,
+    "holding_cost_rate": 0.20,
+    "ordering_cost": 50.0,
+    "lead_time_buffer_days": 2,
+    "default_low_stock_threshold": 10,
+    "default_critical_stock_threshold": 5,
+    "default_reorder_buffer_days": 7,
+    "markup_percentage": 30
+  },
+  "supplier_settings": {
+    "min_rating_threshold": 3.5,
+    "performance_review_frequency": "monthly",
+    "backup_supplier_required": true
+  },
+  "risk_management": {
+    "critical_stock_threshold_ratio": 0.5,
+    "high_risk_threshold_ratio": 1.0,
+    "max_order_variance": 0.2
+  },
+  "dashboard_settings": {
+    "auto_refresh_seconds": 300,
+    "max_chart_data_points": 100,
+    "default_date_range_days": 30
+  },
+  "logging": {
+    "level": "INFO",
+    "file_rotation": true,
+    "max_file_size_mb": 10,
+    "backup_count": 5
+  }
+}

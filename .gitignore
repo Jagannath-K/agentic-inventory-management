@@ -1,0 +1,100 @@
+# Experimental/Development Files
+analyze_accuracy.py
+final_stacked_precision.py
+generate_max_predictable_dataset.py
+generate_optimized_dataset.py
+generate_ultra_optimized_dataset.py
+precision_analysis_final.py
+test_integrated_precision.py
+test_ultra_precision.py
+time_series_precision.py
+ultra_precision_solution.py
+
+# Additional Development/Test Files
+align_prices.py
+create_realistic_data.py
+debug_flat_line.py
+test_*.py
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+
+# Model files (optional - uncomment if you want to exclude large model files)
+# *.pkl
+# models/*.pkl
+
+# Temporary files
+*.tmp
+*.temp
+
+# Environment variables
+.env
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# PyTorch
+*.pth
+
+# TensorFlow
+*.h5
+
+# Data files (uncomment if you want to exclude data)
+# data/*.csv
+# data/*.json
+
+# Backup files
+*_backup.*
+*.bak
+
+# Corrupted/temporary JSON files
+*_corrupted_*.json
+order_log.json
+cycle_results.json
+daily_transactions.json
